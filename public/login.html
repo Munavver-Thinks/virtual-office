@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in · Agent office</title>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header><h1>Agent office</h1></header>
+<main style="grid-template-columns:1fr;max-width:440px;padding-top:48px">
+  <form id="f" class="dbody" style="background:var(--card);border:2px solid var(--wall);border-radius:6px">
+    <div class="field">
+      <label for="token">Access token</label>
+      <input type="text" id="token" autocomplete="off" spellcheck="false" style="font-family:var(--mono)">
+      <div class="hint">Run <code>agent-office token</code> on the server to see it.</div>
+    </div>
+    <div class="err" id="err" role="alert"></div>
+    <div class="actions"><button class="btn primary" type="submit">Sign in</button></div>
+  </form>
+</main>
+<script>
+  const err = document.getElementById("err"), input = document.getElementById("token");
+  input.addEventListener("input", () => (err.textContent = ""));
+  document.getElementById("f").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!input.value.trim()) { err.textContent = "Enter the token first."; return; }
+    const r = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: input.value.trim() }) });
+    if (r.ok) location.href = "/"; else err.textContent = (await r.json().catch(() => ({}))).error || "Sign in failed.";
+  });
+</script>
+</body>
+</html>

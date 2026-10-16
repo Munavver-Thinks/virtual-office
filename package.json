@@ -1,0 +1,19 @@
+{
+  "name": "agent-office",
+  "version": "1.0.0",
+  "description": "A live pixel office for your Claude Code sessions: status, cost, alerts and reports.",
+  "license": "MIT",
+  "bin": { "agent-office": "bin/agent-office.js" },
+  "main": "src/server.js",
+  "files": ["bin", "src", "hooks", "public", "README.md", "LICENSE"],
+  "scripts": {
+    "start": "node bin/agent-office.js start",
+    "demo": "node bin/agent-office.js demo",
+    "install-hooks": "node bin/agent-office.js install",
+    "uninstall-hooks": "node bin/agent-office.js uninstall",
+    "doctor": "node bin/agent-office.js doctor",
+    "test": "node --test"
+  },
+  "engines": { "node": ">=18" },
+  "keywords": ["claude", "claude-code", "agents", "dashboard", "monitoring", "opentelemetry"]
+}
