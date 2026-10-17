@@ -68,4 +68,5 @@ PASS = zero Blocker and zero Major.
 |---|---|---|---|---|
 | Setup | n/a | n/a | approved 2026-10-16 | setup commit |
 | M1 | PASS ([review](reviews/M1.md)) | 1 | approved 2026-10-17 | M1 commit |
-| M2 | | | pending | |
+| M2 | PASS ([review](reviews/M2.md)) | 3 | approved 2026-10-17 | M2 commit |
+| M3 | | | pending | |

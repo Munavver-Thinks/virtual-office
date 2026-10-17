@@ -5,7 +5,11 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 
-const EVENTS = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Notification", "Stop", "SessionEnd"];
+// v1 registered the first 7; re-running install adds the rest.
+const EVENTS = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest",
+  "Notification", "Stop", "StopFailure", "SubagentStart", "SubagentStop", "SessionEnd"];
+// Tool events match on the tool name; "*" means every tool.
+const TOOL_EVENTS = new Set(["PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest"]);
 const MARK = "agent-office";
 const TELEMETRY_KEYS = ["CLAUDE_CODE_ENABLE_TELEMETRY", "OTEL_LOGS_EXPORTER", "OTEL_EXPORTER_OTLP_PROTOCOL", "OTEL_EXPORTER_OTLP_ENDPOINT", "OTEL_EXPORTER_OTLP_HEADERS"];
 
@@ -23,14 +27,16 @@ function stripHooks(settings) {
 }
 
 /**
- * @returns {{settings: object, warnings: string[], telemetry: boolean}}
+ * plans: also set CLAUDE_CODE_ENABLE_TODO_TOOLS=1, so models newer than Opus 4.7 / Sonnet 4.6 / Haiku 4.5 keep a plan.
+ * Re-running install without it keeps a plans setting made earlier; uninstall removes it.
+ * @returns {{settings: object, warnings: string[], telemetry: boolean, plans: boolean}}
  */
-function applyInstall(settings, { command, telemetry = true, url = "http://127.0.0.1:4380", token }) {
+function applyInstall(settings, { command, telemetry = true, plans = false, url = "http://127.0.0.1:4380", token }) {
   const warnings = [];
   const out = { ...settings, hooks: stripHooks(settings) };
   for (const ev of EVENTS) {
     const group = { hooks: [{ type: "command", command, timeout: 5 }] };
-    if (ev === "PreToolUse" || ev === "PostToolUse") group.matcher = "*";
+    if (TOOL_EVENTS.has(ev)) group.matcher = "*";
     out.hooks[ev] = [...(out.hooks[ev] || []), group];
   }
   let telemetryOn = false;
@@ -52,15 +58,27 @@ function applyInstall(settings, { command, telemetry = true, url = "http://127.0
     }
     out.env = env;
   }
-  return { settings: out, warnings, telemetry: telemetryOn };
+  if (plans) {
+    const env = { ...(out.env || {}) };
+    if (env.CLAUDE_CODE_ENABLE_TODO_TOOLS !== undefined && env.AGENT_OFFICE_PLANS !== "1") {
+      warnings.push(`You already set CLAUDE_CODE_ENABLE_TODO_TOOLS=${env.CLAUDE_CODE_ENABLE_TODO_TOOLS}, so --with-plans left it alone.`);
+    } else {
+      Object.assign(env, { CLAUDE_CODE_ENABLE_TODO_TOOLS: "1", AGENT_OFFICE_PLANS: "1" });
+    }
+    out.env = env;
+  }
+  return { settings: out, warnings, telemetry: telemetryOn, plans: (out.env || {}).CLAUDE_CODE_ENABLE_TODO_TOOLS === "1" };
 }
 
+/** Removes our hooks, and the telemetry and plans settings only where we set them. */
 function applyUninstall(settings) {
   const out = { ...settings, hooks: stripHooks(settings) };
   if (!Object.keys(out.hooks).length) delete out.hooks;
-  if (settings.env && settings.env.AGENT_OFFICE_TELEMETRY === "1") {
-    const env = { ...settings.env };
-    for (const k of [...TELEMETRY_KEYS, "AGENT_OFFICE_TELEMETRY"]) delete env[k];
+  const env = { ...(settings.env || {}) }, ours = [];
+  if (env.AGENT_OFFICE_TELEMETRY === "1") ours.push(...TELEMETRY_KEYS, "AGENT_OFFICE_TELEMETRY");
+  if (env.AGENT_OFFICE_PLANS === "1") ours.push("CLAUDE_CODE_ENABLE_TODO_TOOLS", "AGENT_OFFICE_PLANS");
+  if (ours.length) {
+    for (const k of ours) delete env[k];
     if (Object.keys(env).length) out.env = env; else delete out.env;
   }
   return out;
@@ -80,8 +98,17 @@ function writeSettings(file, settings) {
   fs.writeFileSync(file, JSON.stringify(settings, null, 2) + "\n");
 }
 
+const hasOurs = (settings, ev) => (settings.hooks?.[ev] || []).some((g) => (g.hooks || []).some(ours));
+
+/** True only when every event we need is registered. */
 function isInstalled(settings) {
-  return EVENTS.every((ev) => (settings.hooks?.[ev] || []).some((g) => (g.hooks || []).some(ours)));
+  return EVENTS.every((ev) => hasOurs(settings, ev));
 }
 
-module.exports = { EVENTS, settingsPath, hookCommand, applyInstall, applyUninstall, readSettings, writeSettings, isInstalled };
+/** "installed", "outdated" (an older install that misses newer events) or "missing". */
+function installState(settings) {
+  if (isInstalled(settings)) return "installed";
+  return EVENTS.some((ev) => hasOurs(settings, ev)) ? "outdated" : "missing";
+}
+
+module.exports = { EVENTS, settingsPath, hookCommand, applyInstall, applyUninstall, readSettings, writeSettings, isInstalled, installState };

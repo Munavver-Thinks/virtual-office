@@ -14,6 +14,8 @@ const DEFAULTS = {
   notifyOnWaiting: true,
   aliases: {},
   serverUrl: "",
+  // false = hooks on this machine keep only names, paths and counts (no diffs, output or replies)
+  captureDetail: true,
 };
 
 function baseDir() {

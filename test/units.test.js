@@ -3,7 +3,7 @@ const test = require("node:test");
 const assert = require("node:assert");
 const { parseLogs } = require("../src/otlp");
 const { build, targetOf } = require("../hooks/hook");
-const { applyInstall, applyUninstall, isInstalled, EVENTS } = require("../hooks/install");
+const { applyInstall, applyUninstall, isInstalled, installState, EVENTS } = require("../hooks/install");
 const { applySettings, DEFAULTS } = require("../src/config");
 
 // ---- OpenTelemetry ----
@@ -38,8 +38,8 @@ test("handles empty and malformed OTLP bodies", () => {
 test("hook builds compact events", () => {
   const e = build({ session_id: "s", hook_event_name: "PreToolUse", cwd: "/p", tool_name: "Bash", tool_input: { command: "npm   test" } });
   assert.equal(e.type, "hook"); assert.equal(e.tool, "Bash"); assert.equal(e.target, "npm test"); assert.equal(e.prompt, null);
-  const p = build({ session_id: "s", hook_event_name: "UserPromptSubmit", prompt: "x".repeat(500) });
-  assert.equal(p.prompt.length, 200);
+  const p = build({ session_id: "s", hook_event_name: "UserPromptSubmit", prompt: "x".repeat(900) });
+  assert.equal(p.prompt.length, 600);
   assert.equal(build({}), null);
 });
 
@@ -64,6 +64,28 @@ test("install keeps user hooks and env, and is idempotent", () => {
   for (const ev of EVENTS) assert.equal(twice.hooks[ev].flatMap((g) => g.hooks).filter((h) => h.command === cmd).length, 1);
 });
 
+test("re-running install upgrades an old 7-event setup", () => {
+  const OLD = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Notification", "Stop", "SessionEnd"];
+  const hooks = {};
+  for (const ev of OLD) hooks[ev] = [{ ...(ev.endsWith("ToolUse") ? { matcher: "*" } : {}), hooks: [{ type: "command", command: 'node "/old/place/hook.js" --agent-office', timeout: 5 }] }];
+  hooks.Stop.push({ hooks: [theirs] });
+  const old = { hooks };
+  assert.equal(isInstalled(old), false);
+  assert.equal(installState(old), "outdated");
+  assert.equal(installState({}), "missing");
+  const up = applyInstall(old, { command: cmd, token: "t", telemetry: false }).settings;
+  assert.equal(installState(up), "installed");
+  for (const ev of ["PermissionRequest", "SubagentStart", "SubagentStop", "PostToolUseFailure", "StopFailure"]) assert.ok(up.hooks[ev], ev);
+  for (const ev of EVENTS) {
+    const mine = up.hooks[ev].flatMap((g) => g.hooks).filter((h) => String(h.command).includes("--agent-office"));
+    assert.equal(mine.length, 1, ev); assert.equal(mine[0].command, cmd, "old path replaced"); assert.equal(mine[0].timeout, 5);
+  }
+  assert.equal(up.hooks.PermissionRequest[0].matcher, "*"); assert.equal(up.hooks.PostToolUseFailure[0].matcher, "*");
+  assert.equal(up.hooks.SubagentStart[0].matcher, undefined);
+  assert.ok(up.hooks.Stop.some((g) => g.hooks.includes(theirs)), "user hooks kept");
+  assert.deepEqual(applyInstall(up, { command: cmd, token: "t", telemetry: false }).settings, up, "idempotent");
+});
+
 test("install does not override another telemetry endpoint", () => {
   const r = applyInstall({ env: { OTEL_EXPORTER_OTLP_ENDPOINT: "https://otel.corp" } }, { command: cmd, token: "t" });
   assert.equal(r.telemetry, false); assert.equal(r.warnings.length, 1);
@@ -73,6 +95,24 @@ test("install does not override another telemetry endpoint", () => {
 test("uninstall removes only our parts", () => {
   const start = { env: { FOO: "1" }, hooks: { PreToolUse: [{ matcher: "Bash", hooks: [theirs] }] } };
   assert.deepEqual(applyUninstall(applyInstall(start, { command: cmd, token: "t" }).settings), start);
+});
+
+test("install --with-plans turns on task tools; uninstall removes them only if we set them", () => {
+  const r = applyInstall({ env: { FOO: "1" } }, { command: cmd, token: "t", telemetry: false, plans: true });
+  assert.equal(r.plans, true);
+  assert.deepEqual(r.settings.env, { FOO: "1", CLAUDE_CODE_ENABLE_TODO_TOOLS: "1", AGENT_OFFICE_PLANS: "1" });
+  assert.deepEqual(applyInstall(r.settings, { command: cmd, token: "t", telemetry: false }).settings.env, r.settings.env, "a later install keeps it");
+  assert.deepEqual(applyUninstall(r.settings), { env: { FOO: "1" } });
+  // The user set it themselves: left alone on install and on uninstall.
+  const mine = applyInstall({ env: { CLAUDE_CODE_ENABLE_TODO_TOOLS: "0" } }, { command: cmd, token: "t", telemetry: false, plans: true });
+  assert.equal(mine.plans, false); assert.equal(mine.warnings.length, 1);
+  assert.equal(mine.settings.env.CLAUDE_CODE_ENABLE_TODO_TOOLS, "0");
+  assert.deepEqual(applyUninstall(mine.settings), { env: { CLAUDE_CODE_ENABLE_TODO_TOOLS: "0" } });
+  // With telemetry too, everything we added comes off and the user's env stays.
+  const both = applyInstall({ env: { FOO: "1" } }, { command: cmd, token: "t", plans: true }).settings;
+  assert.deepEqual(applyUninstall(both), { env: { FOO: "1" } });
+  assert.deepEqual(applyUninstall({ env: {} }), { env: {} }, "an env we didn't touch is left as is");
+  assert.equal(applyInstall({}, { command: cmd, token: "t", telemetry: false }).plans, false);
 });
 
 test("no-telemetry install leaves env alone", () => {

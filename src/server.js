@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const config = require("./config");
-const { Store } = require("./store");
+const { Store, localDate, validDate } = require("./store");
 const { parseLogs } = require("./otlp");
 const { attachAlerts, sendWebhook } = require("./alerts");
 const { startDemo } = require("./demo");
@@ -47,11 +47,13 @@ function createServer(opts = {}) {
   const log = opts.log || console;
   const p = config.paths(opts.dir);
   let cfg = config.load(p.dir);
+  // Demo mode shows a $25 budget when none is set. Demo settings live in memory only and are never saved.
+  if (opts.demo && !cfg.dailyBudgetUsd) cfg = { ...cfg, dailyBudgetUsd: 25 };
   const getConfig = () => cfg;
   const rt = config.runtime(cfg);
   const openUI = LOOPBACK.has(rt.host);
 
-  const store = new Store({ getConfig, dataDir: opts.demo ? null : p.data });
+  const store = new Store({ getConfig, dataDir: opts.demo ? null : p.data, log });
   const replayed = store.replay();
   attachAlerts(store, getConfig, log);
   const stopDemo = opts.demo ? startDemo(store) : null;
@@ -80,6 +82,8 @@ function createServer(opts = {}) {
   store.on("change", () => { if (!pending) pending = setTimeout(broadcast, 250); });
   const tick = setInterval(() => { if (clients.size) broadcast(); }, 15000);
   const heartbeat = setInterval(() => { for (const res of clients) res.write(": ping\n\n"); }, 20000);
+  // prune() handles file trouble itself; this guard keeps any other surprise from killing the server.
+  const pruner = setInterval(() => { try { store.prune(); } catch (err) { log.warn(`Hourly cleanup failed: ${err.message}`); } }, 3600000);
 
   const canView = (req) => openUI || safeEqual(cookie(req, "ao_token"), cfg.token) || safeEqual(bearer(req), cfg.token);
   const canIngest = (req) => safeEqual(bearer(req), cfg.token);
@@ -134,6 +138,19 @@ function createServer(opts = {}) {
       req.on("close", () => clients.delete(res));
       return;
     }
+    const agentPath = /^\/api\/agents\/([^/]+)$/.exec(url.pathname);
+    if (req.method === "GET" && agentPath) {
+      let id = null;
+      try { id = decodeURIComponent(agentPath[1]); } catch {}
+      if (!id || !/^[\w.:-]{1,100}$/.test(id)) return send(res, 400, { error: "That agent id isn't valid." });
+      const d = store.detail(id);
+      return d ? send(res, 200, d) : send(res, 404, { error: "No agent with that id." });
+    }
+    if (route === "GET /api/timeline") {
+      const date = url.searchParams.get("date") || localDate(Date.now());
+      if (!validDate(date)) return send(res, 400, { error: "date must be a real day as YYYY-MM-DD." });
+      return send(res, 200, store.timeline(date));
+    }
     if (route === "GET /api/settings") return send(res, 200, publicSettings());
     if (route === "PUT /api/settings" || route === "POST /api/settings/test-webhook") {
       if (!sameOrigin(req)) return send(res, 403, { error: "Blocked cross-site request." });
@@ -145,7 +162,8 @@ function createServer(opts = {}) {
       }
       const r = config.applySettings(cfg, body);
       if (r.error) return send(res, 400, { error: r.error });
-      cfg = r.cfg; config.save(cfg, p.dir);
+      cfg = r.cfg;
+      if (!opts.demo) config.save(cfg, p.dir);
       store.emit("change");
       return send(res, 200, publicSettings());
     }
@@ -166,7 +184,7 @@ function createServer(opts = {}) {
   });
 
   function close() {
-    clearInterval(spoolTimer); clearInterval(tick); clearInterval(heartbeat);
+    clearInterval(spoolTimer); clearInterval(tick); clearInterval(heartbeat); clearInterval(pruner);
     if (stopDemo) stopDemo();
     for (const res of clients) res.end();
     return new Promise((r) => server.close(r));
