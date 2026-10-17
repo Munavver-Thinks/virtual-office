@@ -1,0 +1,180 @@
+/* Agent Office base components. Needs tokens.css first. Markup comes from components.js. */
+
+.ao-sr { position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.ao-icon { flex: none; display: inline-block; vertical-align: -.2em; }
+
+/* ---------- type scale ---------- */
+.ao-title { margin: 0; font-size: var(--fs-title); font-weight: var(--fw-title); line-height: 1.2; letter-spacing: -.01em; }
+.ao-name { margin: 0; font-size: var(--fs-name); font-weight: var(--fw-name); line-height: 1.25; }
+.ao-big { font-size: var(--fs-big); font-weight: var(--fw-big); line-height: 1.1; letter-spacing: -.01em; }
+.ao-meta { font-size: var(--fs-meta); color: var(--text-2); }
+.ao-label { font-size: var(--fs-label); font-weight: var(--fw-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--text-3); }
+.ao-mono { font-family: var(--font-mono); font-size: var(--fs-mono); }
+
+/* ---------- glass panel ---------- */
+.ao-panel {
+  position: relative; min-width: 0; padding: 16px;
+  background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+  border: 1px solid var(--line); border-radius: var(--r-panel); box-shadow: var(--shadow);
+}
+.ao-panel-head { display: flex; align-items: center; gap: 8px; min-height: 24px; margin-bottom: 12px; }
+.ao-panel-head > .ao-icon { color: var(--text-2); }
+.ao-panel-title { margin: 0; font-size: var(--fs-panel); font-weight: var(--fw-panel); line-height: 1.3; }
+.ao-panel-end { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: var(--fs-meta); color: var(--text-2); }
+
+/* Stale: last data kept and desaturated. Text steps down a level instead of fading, so it stays above 4.5:1.
+   color covers inherited text; --text covers components that set color: var(--text) (buttons, code box). */
+.ao-stale { filter: grayscale(1); color: var(--text-2); --text: var(--text-2); }
+.ao-stale-note { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border: 1px dashed var(--line-2); border-radius: var(--r-pill); color: var(--text-2); white-space: nowrap; }
+
+/* ---------- panel states ---------- */
+.ao-state { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 22px 16px; text-align: center; color: var(--text-2); }
+.ao-state p { margin: 0; max-width: 40ch; }
+.ao-state-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--hover); color: var(--text-2); }
+.ao-state.is-ok .ao-state-icon { background: var(--teal-s); color: var(--teal-t); }
+/* Error: the only place a panel uses red. */
+.ao-state--error { border: 1px solid var(--red-s); border-radius: 10px; background: var(--red-s); color: var(--text); }
+.ao-state--error .ao-state-icon { background: var(--red-s); color: var(--red-t); }
+
+.ao-loading { padding: 2px 0; }
+.ao-skel-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+.ao-skel-lines { flex: 1; display: grid; gap: 7px; }
+.ao-skel {
+  display: block; height: 10px; border-radius: 5px;
+  background: linear-gradient(90deg, var(--hover) 30%, var(--line-2) 50%, var(--hover) 70%) 0 0 / 300% 100%;
+  animation: ao-shimmer 1.6s ease-in-out infinite;
+}
+.ao-skel--sm { height: 8px; }
+.ao-skel--avatar { flex: none; width: 28px; height: 28px; border-radius: 8px; }
+@keyframes ao-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+
+/* ---------- buttons ---------- */
+.ao-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: var(--h-btn); padding: 0 14px;
+  border: 1px solid var(--line-2); border-radius: var(--r-btn); background: var(--hover); color: var(--text);
+  font-size: 13px; font-weight: 600; line-height: 1; white-space: nowrap; cursor: pointer;
+  transition: background-color .15s, border-color .15s, box-shadow .15s, color .15s;
+}
+.ao-btn:hover { background: var(--line); border-color: var(--text-3); }
+.ao-btn--primary { background: var(--teal-btn); border-color: var(--teal-btn); color: var(--on-teal); }
+.ao-btn--primary:hover { background: var(--teal-btn); border-color: var(--teal-btn); box-shadow: 0 0 0 3px var(--teal-s); }
+.ao-btn--ghost { background: transparent; border-color: transparent; color: var(--text-2); }
+.ao-btn--ghost:hover { background: var(--hover); border-color: transparent; color: var(--text); }
+/* AMBER BUTTON: ONLY for "Answer" on needs-you items (answerButton). Never use it for anything else. */
+.ao-btn--answer { background: var(--amber); border-color: var(--amber); color: var(--on-amber); }
+.ao-btn--answer:hover { background: var(--amber); border-color: var(--amber); box-shadow: 0 0 0 3px var(--amber-s); }
+.ao-btn--icon { width: var(--h-btn); padding: 0; }
+.ao-btn--sm { min-height: var(--h-sm); padding: 0 10px; border-radius: 7px; }
+.ao-btn--sm.ao-btn--icon { width: var(--h-sm); padding: 0; }
+.ao-btn:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
+
+/* ---------- filter chip (aria-pressed) ---------- */
+.ao-chip {
+  display: inline-flex; align-items: center; gap: 7px; min-height: var(--h-btn); padding: 0 12px;
+  border: 1px solid var(--line-2); border-radius: var(--r-btn); background: var(--glass); color: var(--text);
+  font-size: 13px; font-weight: 600; line-height: 1; white-space: nowrap; cursor: pointer;
+  transition: background-color .15s, border-color .15s;
+}
+.ao-chip:hover { background: linear-gradient(var(--hover), var(--hover)), var(--glass); }
+.ao-chip-icon { display: inline-flex; color: var(--text-2); }
+.ao-chip-count { font-weight: 700; }
+.ao-chip-check { display: none; color: var(--teal-t); }
+.ao-chip[aria-pressed="true"] { border-color: var(--teal); background: linear-gradient(var(--teal-s), var(--teal-s)), var(--bg-2); box-shadow: inset 0 0 0 1px var(--teal); }
+.ao-chip[aria-pressed="true"] .ao-chip-check { display: inline-flex; }
+.ao-tone-working { color: var(--teal-t); }
+.ao-tone-needs { color: var(--amber-t); }
+.ao-tone-idle { color: var(--idle); }
+.ao-tone-offline { color: var(--off); }
+
+/* ---------- state pill: icon + label, never colour alone ---------- */
+/* Each pill paints its own opaque base (--bg-2) so its text keeps 4.5:1 on any surface. */
+.ao-pill {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px;
+  border: 1px solid transparent; border-radius: var(--r-pill);
+  font-size: 12px; font-weight: 600; line-height: 1; white-space: nowrap;
+}
+.ao-pill--working { color: var(--teal-t); background: linear-gradient(var(--teal-s), var(--teal-s)), var(--bg-2); border-color: var(--teal-s); }
+.ao-pill--needs { color: var(--amber-t); background: linear-gradient(var(--amber-s), var(--amber-s)), var(--bg-2); border-color: var(--amber-b); }
+.ao-pill--idle { color: var(--idle); background: linear-gradient(var(--hover), var(--hover)), var(--bg-2); border-color: var(--line-2); }
+.ao-pill--offline { color: var(--off); background: var(--bg-2); border: 1px dashed var(--off); }
+
+/* ---------- segmented control (radiogroup) ---------- */
+.ao-seg { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: var(--r-btn); background: var(--hover); }
+.ao-seg-opt {
+  display: inline-flex; align-items: center; gap: 6px; min-height: calc(var(--h-btn) - 8px); padding: 0 12px;
+  border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--text-2);
+  font-size: 13px; font-weight: 600; line-height: 1; white-space: nowrap; cursor: pointer;
+}
+.ao-seg-opt:hover { color: var(--text); }
+.ao-seg-opt[aria-checked="true"] { background: var(--bg-2); border-color: var(--line-2); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.18); }
+.ao-seg-count { color: var(--text-3); font-weight: 500; }
+@media (pointer: coarse) { .ao-seg-opt { min-height: var(--h-btn); } }
+
+/* ---------- progress bar: solid = done, striped = in progress ---------- */
+.ao-progress { display: flex; height: 8px; overflow: hidden; border-radius: var(--r-pill); background: var(--hover); box-shadow: inset 0 0 0 1px var(--line); }
+.ao-progress > span { flex: none; height: 100%; }
+.ao-progress-done { background: var(--teal); }
+.ao-progress-doing {
+  background-color: var(--teal-s);
+  background-image: linear-gradient(135deg, var(--teal) 25%, transparent 25% 50%, var(--teal) 50% 75%, transparent 75%);
+  background-size: 8px 8px;
+  animation: ao-stripes 1s linear infinite;
+}
+@keyframes ao-stripes { to { background-position: 8px 0; } }
+
+/* ---------- budget ring: teal, red only over 100% ---------- */
+.ao-ring { display: inline-flex; align-items: center; gap: 10px; }
+.ao-ring svg { flex: none; }
+.ao-ring-track { fill: none; stroke: var(--line-2); stroke-width: 4; }
+.ao-ring-bar { fill: none; stroke: var(--teal); stroke-width: 4; stroke-linecap: round; transition: stroke-dasharray .4s; }
+.ao-ring.is-over .ao-ring-bar { stroke: var(--red); }
+.ao-ring-text { display: flex; flex-direction: column; gap: 2px; line-height: 1.2; }
+.ao-ring-amount { font-size: 16px; font-weight: 700; }
+.ao-ring-sub { font-size: var(--fs-meta); color: var(--text-2); }
+.ao-ring.is-over .ao-ring-sub { color: var(--red-t); }
+
+/* ---------- path chip: middle-truncated, click to copy ---------- */
+.ao-copy {
+  position: relative; display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: var(--h-sm); padding: 0 8px;
+  border: 1px solid var(--line); border-radius: 7px; background: var(--hover); color: var(--text-2);
+  font-family: var(--font-mono); font-size: var(--fs-mono); line-height: 1; cursor: pointer;
+}
+.ao-copy:hover { color: var(--text); border-color: var(--line-2); }
+.ao-copy > .ao-icon { color: var(--text-3); }
+.ao-copy-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ao-copy-done { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; gap: 5px; color: var(--teal-t); font-family: var(--font-ui); font-weight: 600; }
+.ao-copy.is-copied > :not(.ao-copy-done) { visibility: hidden; }
+.ao-copy.is-copied .ao-copy-done { display: flex; }
+
+/* ---------- code box: mono, end-truncated ---------- */
+.ao-code {
+  display: flex; align-items: flex-start; gap: 8px; min-width: 0; padding: 8px 10px 8px 12px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--code); color: var(--text);
+  font-family: var(--font-mono); font-size: var(--fs-mono); line-height: 1.5;
+}
+.ao-code-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: inherit; }
+.ao-code.is-open .ao-code-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.ao-code-more { margin: -3px -4px -3px 0; }
+.ao-code-more .ao-icon { transition: transform .15s; }
+.ao-code.is-open .ao-code-more .ao-icon { transform: rotate(180deg); }
+
+/* ---------- avatar: project colour + initials ---------- */
+.ao-avatar {
+  --av: var(--proj-6);
+  display: inline-grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 8px;
+  background: var(--av); color: var(--on-proj); font-size: 11px; font-weight: 700; line-height: 1; letter-spacing: .02em; user-select: none;
+}
+.ao-avatar--sm { width: 22px; height: 22px; border-radius: 6px; font-size: 10px; }
+.ao-avatar--lg { width: 48px; height: 48px; border-radius: 12px; font-size: 17px; }
+.ao-avatar--round { border-radius: 50%; }
+
+/* ---------- hover card: max 280px, placed by positionHoverCard() ---------- */
+.ao-hovercard {
+  position: absolute; z-index: 40; left: 0; top: 0; box-sizing: border-box;
+  width: max-content; max-width: min(280px, calc(100vw - 16px)); padding: 12px;
+  background: var(--glass-2); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+  border: 1px solid var(--line-2); border-radius: 12px; box-shadow: var(--shadow-pop);
+  color: var(--text); font-size: 13px; line-height: 1.4;
+}
+.ao-hovercard[hidden] { display: none; }

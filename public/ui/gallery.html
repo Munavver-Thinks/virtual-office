@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en" class="ao-dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Component gallery · Agent Office</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%232DD4BF%27 stroke-width=%272%27 stroke-linejoin=%27round%27><path d=%27M12 2.8l8.5 4.9v8.6L12 21.2l-8.5-4.9V7.7zM3.5 7.7L12 12.6l8.5-4.9M12 12.6v8.6%27/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/ui/tokens.css">
+<link rel="stylesheet" href="/ui/components.css">
+<style>
+  /* Gallery layout only. Components live in components.css. */
+  body { margin: 0; }
+  .g-top { position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 12px 24px;
+    background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border-bottom: 1px solid var(--line); }
+  .g-brand { display: flex; align-items: center; gap: 10px; }
+  .g-brand > .ao-icon { color: var(--teal-t); }
+  @media (max-width: 700px) { .g-top { position: static; } }
+  .g-tools { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .g-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 600px), 1fr)); }
+  .g-col { min-width: 0; padding: 24px;
+    background: radial-gradient(900px 500px at 15% 0%, rgba(167,139,250,.10), transparent 60%), radial-gradient(800px 600px at 90% 40%, rgba(96,165,250,.09), transparent 60%), var(--bg); }
+  .g-col-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 20px; }
+  .g-log { margin: 0; }
+  .g-sec { margin: 0 0 28px; }
+  .g-sec > h3 { margin: 0 0 10px; }
+  .g-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .g-stack { display: grid; gap: 12px; }
+  .g-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+  .g-note { margin: 6px 0 0; }
+  .g-strong { font-weight: 650; }
+  .g-sw { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .g-sw-c { flex: none; width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--line-2); }
+  .g-sws { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px 12px; }
+  .g-type { display: grid; gap: 8px; }
+  .g-type p { margin: 0; }
+  .g-needs { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--amber-b); border-radius: 12px; background: linear-gradient(var(--amber-s), var(--amber-s)), var(--bg-2); }
+  .g-needs-head, .g-hc-head { display: flex; align-items: center; gap: 10px; }
+  .g-needs-head > .ao-pill { margin-left: auto; }
+  .g-needs-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .g-needs-foot > .ao-meta { flex: 1; min-width: 160px; }
+  .g-prog { display: grid; grid-template-columns: 130px 1fr 44px; align-items: center; gap: 10px; }
+  .g-prog > :last-child { text-align: right; }
+  .g-bounds { position: relative; height: 380px; border: 1px dashed var(--line-2); border-radius: 12px; }
+  .g-anchor { position: absolute; }
+  .g-hc { display: grid; gap: 8px; }
+  .g-hc-row { display: flex; align-items: center; gap: 8px; }
+  .g-hc-row > .ao-progress { flex: 1; }
+  .g-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .g-list li { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .g-list .g-what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .g-icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+  .g-icon { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 4px; border: 1px solid var(--line); border-radius: 10px; color: var(--text); }
+  .g-icon code { font-family: var(--font-mono); font-size: 11px; color: var(--text-2); }
+  .g-dl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px 16px; margin: 0; }
+  .g-dl dt { font-family: var(--font-mono); font-size: var(--fs-mono); color: var(--text-2); overflow-wrap: anywhere; }
+  .g-dl dd { margin: 0; font-family: var(--font-mono); font-size: var(--fs-mono); overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<header class="g-top" id="top"></header>
+<main class="g-cols">
+  <section class="ao-dark g-col" id="col-d" aria-labelledby="d-h"></section>
+  <section class="ao-light g-col" id="col-l" aria-labelledby="l-h"></section>
+</main>
+<script type="module">
+  import { initTheme } from "./theme.js";
+  import { icon, ICONS } from "./icons.js";
+  import * as ui from "./components.js";
+  import * as f from "./format.js";
+
+  const M = 60000;
+  const AS_OF = new Date(new Date().setHours(15, 40, 0, 0));
+  const sec = (title, html, note = "") => `<section class="g-sec"><h3 class="ao-label">${f.esc(title)}</h3>${html}${note ? `<p class="ao-meta g-note">${f.esc(note)}</p>` : ""}</section>`;
+  const row = (...items) => `<div class="g-row">${items.join("")}</div>`;
+  const TOKENS = ["bg", "bg-2", "glass", "glass-2", "line", "line-2", "hover", "text", "text-2", "text-3", "teal", "teal-t", "teal-s", "teal-btn", "on-teal",
+    "amber", "amber-t", "amber-s", "amber-b", "on-amber", "red", "red-t", "red-s", "idle", "off", "code"];
+  const PROJECTS = ["violet", "sky", "lime", "pink", "indigo", "slate"];
+  const ACTIVITY = [
+    ["basket bill", "supermarket-pos", 0, "working", "Editing", "BasketTotals.tsx", "15:41"],
+    ["refund flow", "checkout-api", 1, "waiting", "Wants permission to edit", ".env.production", "15:32"],
+    ["login fix", "supermarket-pos", 0, "idle", "Finished turn", "", "15:20"],
+    ["webhook retries", "checkout-api", 1, "offline", "Went offline", "", "14:58"],
+  ];
+
+  function activity() {
+    return `<ul class="g-list">${ACTIVITY.map(([name, project, color, state, what, target, t]) => `<li>
+      ${ui.avatar({ name, color, size: "sm", decorative: true })}
+      <span class="g-what"><span class="g-strong">${f.esc(name)}</span> <span class="ao-meta">${f.esc(project)}</span><br>
+        <span>${f.esc(what)}</span>${target ? ` <span class="ao-mono">${f.esc(target)}</span>` : ""}</span>
+      ${ui.statePill(state)}<span class="ao-meta">${t}</span></li>`).join("")}</ul>`;
+  }
+
+  function needsCard() {
+    return `<div class="g-needs">
+      <div class="g-needs-head">${ui.avatar({ name: "refund flow", color: 1 })}
+        <div><div class="g-strong">refund flow</div><div class="ao-meta">checkout-api · thinkpad-x1</div></div>${ui.waitPill(9 * M)}</div>
+      <div class="g-strong">Wants permission to edit a file</div>
+      ${ui.codeBox(".env.production", { what: "file" })}
+      <div class="g-needs-foot"><span class="ao-meta">Plan step 4 of 9 · Add the refund webhook secret</span>${ui.answerButton({ agent: "refund flow" })}${ui.button({ label: "Jump" })}</div>
+    </div>`;
+  }
+
+  function hoverBody(name, project, color, state, what, target, done, total, cost) {
+    return `<div class="g-hc">
+      <div class="g-hc-head">${ui.avatar({ name, color, size: "sm", decorative: true })}<div><div class="g-strong">${f.esc(name)}</div><div class="ao-meta">${f.esc(project)} · studio-mac</div></div></div>
+      <div class="g-hc-row">${ui.statePill(state, { waitMs: 4 * M })}</div>
+      <div>${f.esc(what)} <span class="ao-mono">${f.esc(target)}</span></div>
+      <div class="g-hc-row">${ui.progressBar({ done, doing: 1, total })}<span class="ao-meta">${done}/${total}</span></div>
+      <div class="ao-meta">${f.money(cost)} · ${f.tokensLine({ input: 2100, output: 231000, cacheRead: 34400000 })}</div>
+    </div>`;
+  }
+
+  function hoverDemo(p) {
+    const anchors = [
+      ["top: 6px; left: 16px", `${p}-hc1`, "receipt printer · near the top", hoverBody("receipt printer", "supermarket-pos", 0, "waiting", "Wants permission to run", "sudo apt install cups-filters", 2, 6, 1.12)],
+      ["top: 210px; right: 6px", `${p}-hc2`, "basket bill · right edge", hoverBody("basket bill", "supermarket-pos", 0, "working", "Editing", "BasketTotals.tsx", 5, 8, 3.84)],
+      ["bottom: 10px; left: 40%", `${p}-hc3`, "tokens page · bottom", hoverBody("tokens page", "docs-site", 2, "idle", "Finished turn after editing", "tokens.css", 3, 5, 0.42)],
+    ];
+    return `<div class="g-bounds" data-hover-bounds>${anchors.map(([pos, id, label, body]) =>
+      `<button type="button" class="ao-btn ao-btn--secondary ao-btn--sm g-anchor" style="${pos}" data-hovercard="${id}" aria-describedby="${id}">${f.esc(label)}</button>${ui.hoverCard({ id, body })}`).join("")}</div>`;
+  }
+
+  const errorPanel = (p, loading) => ui.panel({ id: `${p}-err`, title: "Today's progress", level: 4, busy: loading,
+    body: loading ? ui.loadingState({ rows: 2, avatar: false }) : ui.errorState({ text: "Couldn't load today's progress. The server didn't answer.", action: { label: "Retry", attrs: { "data-retry": p } } }) });
+
+  function column(p, name) {
+    return `<div class="g-col-head"><h2 class="ao-name" id="${p}-h">${name} theme</h2><p class="ao-meta g-log" aria-live="polite">Sample data. Use a chip or switch to see its event here.</p></div>
+    ${sec("Colour tokens", `<div class="g-sws">${TOKENS.map((t) => `<div class="g-sw"><span class="g-sw-c" style="background:var(--${t})"></span><code class="ao-mono">--${t}</code></div>`).join("")}</div>`)}
+    ${sec("Project colours (never amber, orange or red)", `<div class="g-sws">${PROJECTS.map((n, i) => `<div class="g-sw"><span class="g-sw-c" style="background:var(--proj-${i + 1})"></span><code class="ao-mono">--proj-${i + 1} ${n}</code></div>`).join("")}</div>`)}
+    ${sec("Type", `<div class="g-type">
+      <div class="ao-title">Page title 26/800</div>
+      <div class="ao-name">supermarket-pos · basket bill</div>
+      <div><span class="ao-big">26</span> <span class="ao-meta">big number 30/800</span></div>
+      <div class="ao-panel-title">Panel title 14/650</div>
+      <p>Body 14. Wants permission to run a command.</p>
+      <div class="ao-meta">Meta 12.5 · checkout-api · thinkpad-x1</div>
+      <div class="ao-label">Label 11 · day replay</div>
+      <div class="ao-mono">${f.tokensLine({ input: 48200, output: 1210000, cacheRead: 92400000 })}</div></div>`)}
+    ${sec("Buttons", `<div class="g-stack">
+      ${row(ui.button({ label: "Save settings", variant: "primary" }), ui.button({ label: "Jump" }), ui.button({ label: "Dismiss", variant: "ghost" }),
+        ui.button({ label: "Copy token", icon: "copy" }), ui.button({ label: "Disabled", variant: "primary", attrs: { disabled: true } }))}
+      ${row(ui.iconButton({ icon: "settings", label: "Settings" }), ui.iconButton({ icon: "bell", label: "Alerts" }), ui.iconButton({ icon: "copy", label: "Copy session id", variant: "secondary" }),
+        ui.button({ label: "Small", size: "sm" }), ui.iconButton({ icon: "x", label: "Close", size: "sm" }))}
+      ${needsCard()}</div>`, "Amber Answer appears only on needs-you items like the card above.")}
+    ${sec("Filter chips", row(ui.stateChip("working", 4, true), ui.stateChip("waiting", 2), ui.stateChip("idle", 1), ui.stateChip("offline", 1),
+      ui.filterChip({ label: "Errors only", value: "errors" })), "aria-pressed toggles on click; pressed chips also show a check.")}
+    ${sec("State pills", row(ui.statePill("working"), ui.statePill("waiting", { waitMs: 9 * M }), ui.statePill("idle"), ui.statePill("offline"), ui.waitPill(4 * M)))}
+    ${sec("Segmented control", `<div class="g-stack">
+      ${row(ui.segmented({ label: "Range", value: "today", options: [{ value: "today", label: "Today" }, { value: "7d", label: "7d" }, { value: "30d", label: "30d" }] }))}
+      ${row(ui.segmented({ label: "Trace filter", value: "all", options: [{ value: "all", label: "All", count: 42 }, { value: "commands", label: "Commands", count: 12 }, { value: "edits", label: "Edits", count: 9 }, { value: "web", label: "Web", count: 0 }] }))}</div>`,
+      "Tab into the group, then use the arrow keys, Home and End.")}
+    ${sec("Progress", `<div class="g-stack">
+      <div><span class="ao-big">26</span> <span class="ao-meta">of 50 planned tasks done</span></div>
+      ${ui.progressBar({ done: 26, doing: 7, total: 50 })}
+      <div class="ao-meta">${icon("check", { size: 13 })} 26 done · 7 in progress · 17 planned</div>
+      ${[["supermarket-pos", 14, 3, 25], ["checkout-api", 9, 2, 20], ["docs-site", 3, 1, 5]].map(([n, d, g, t]) =>
+        `<div class="g-prog"><span>${n}</span>${ui.progressBar({ done: d, doing: g, total: t })}<span>${d}/${t}</span></div>`).join("")}
+      <div class="g-prog"><span class="ao-meta">no plan yet</span>${ui.progressBar({})}<span>0/0</span></div></div>`, "Solid = done, striped = in progress. Each bar has a text alternative.")}
+    ${sec("Budget ring", row(ui.budgetRing({ spent: 13.72, budget: 25 }), ui.budgetRing({ spent: 28.1, budget: 25 }), ui.budgetRing({ spent: 4.2, budget: 0 })),
+      "Red only over 100%, and the text says Over budget too.")}
+    ${sec("Path chip", row(ui.pathChip("/Users/me/projects/clients/supermarket-pos"), ui.pathChip("/srv/docs-site")), "Click to copy the full path.")}
+    ${sec("Code box", `<div class="g-stack">${ui.codeBox(".env.production", { what: "file" })}${ui.codeBox("sudo apt install cups-filters printer-driver-escpr && sudo systemctl restart cups && lpstat -p")}</div>`,
+      "End-truncated. Hover for the full text, or use the expand button.")}
+    ${sec("Avatars", `<div class="g-stack">${row(...PROJECTS.map((n, i) => ui.avatar({ name: ["basket bill", "refund flow", "tokens page", "login fix", "rate limiter", "inventory sync"][i], color: i })))}
+      ${row(ui.avatar({ name: "receipt printer", color: 0, size: "sm" }), ui.avatar({ name: "receipt printer", color: 0 }), ui.avatar({ name: "receipt printer", color: 0, size: "lg" }), ui.avatar({ name: "Munavver Khan", color: 5, round: true }))}</div>`)}
+    ${sec("Hover card", hoverDemo(p), "Hover or focus a button. Above by default, below near the top, always 8px inside the dashed box. Esc closes.")}
+    ${sec("Panel states", `<div class="g-grid">
+      ${ui.panel({ id: `${p}-live`, title: "Live activity", level: 4, meta: "Newest first", body: activity() })}
+      ${ui.panel({ id: `${p}-empty`, title: "Needs you now", icon: "hand", level: 4, body: ui.emptyState({ ok: true, text: "Nobody is waiting on you." }) })}
+      ${ui.panel({ id: `${p}-empty2`, title: "Live activity", level: 4, body: ui.emptyState({ icon: "pulse", text: "No activity yet. Start claude in any folder.", action: { label: "How to connect" } }) })}
+      ${ui.panel({ id: `${p}-load`, title: "Live activity", level: 4, busy: true, body: ui.loadingState({ rows: 3 }) })}
+      ${errorPanel(p, false)}
+      ${ui.panel({ id: `${p}-stale`, title: "Live activity", level: 4, stale: AS_OF, body: activity() })}</div>`,
+      "Live (for comparison), empty, empty with an action, loading, error, stale.")}
+    ${sec("Icons", `<div class="g-icons">${Object.keys(ICONS).map((n) => `<div class="g-icon">${icon(n, { size: 20 })}<code>${n}</code></div>`).join("")}</div>`)}
+    ${sec("Formatters", `<dl class="g-dl">${[
+      ["tokensLine(2000, 231000, 34.4M)", f.tokensLine({ input: 2000, output: 231000, cacheRead: 34400000 })],
+      ["money(13.72)", f.money(13.72)], ["money(25, trim)", f.money(25, { trim: true })],
+      ["duration(2h 32m)", f.duration(152 * M)], ["waitTime(9m 40s)", f.waitTime(9 * M + 40000)],
+      ["middleTruncate(path, 32)", f.middleTruncate("/Users/me/projects/clients/supermarket-pos", 32)],
+      ["endTruncate(cmd, 28)", f.endTruncate("npm run test -- --watch --coverage", 28)],
+      ["initials(agent name)", f.initials("supermarket-pos · basket bill")], ["clock(as of)", f.clock(AS_OF)],
+    ].map(([k, v]) => `<dt>${f.esc(k)}</dt><dd>${f.esc(v)}</dd>`).join("")}</dl>`)}`;
+  }
+
+  initTheme();
+  document.getElementById("top").innerHTML = `<div class="g-brand">${icon("office", { size: 26 })}<div><h1 class="ao-title">Component gallery</h1>
+    <div class="ao-meta">Agent Office design system · the columns are pinned to each theme, the bar follows your choice</div></div></div>
+    <div class="g-tools"><span class="ao-label">Theme</span>${ui.themeSwitch()}${ui.themeToggle()}</div>`;
+  for (const [p, name] of [["d", "Dark"], ["l", "Light"]]) {
+    const col = document.getElementById(`col-${p}`);
+    col.innerHTML = column(p, name);
+    const log = col.querySelector(".g-log");
+    col.addEventListener("ao-chip", (e) => { log.textContent = `ao-chip · ${e.detail.value} · ${e.detail.pressed ? "pressed" : "not pressed"}`; });
+    col.addEventListener("ao-segment", (e) => { log.textContent = `ao-segment · ${e.detail.value}`; });
+  }
+  ui.bind(document);
+
+  // Retry shows the loading state for a moment, then the error again, so both are easy to compare.
+  document.addEventListener("click", (e) => {
+    const p = e.target.closest("[data-retry]")?.dataset.retry;
+    if (!p) return;
+    document.getElementById(`${p}-err`).outerHTML = errorPanel(p, true);
+    setTimeout(() => {
+      document.getElementById(`${p}-err`).outerHTML = errorPanel(p, false);
+      document.querySelector(`[data-retry="${p}"]`).focus();
+    }, 1200);
+  });
+</script>
+</body>
+</html>

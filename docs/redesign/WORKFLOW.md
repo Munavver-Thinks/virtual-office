@@ -67,4 +67,5 @@ PASS = zero Blocker and zero Major.
 | Module | Review verdict | Fix rounds | Owner decision | Commit |
 |---|---|---|---|---|
 | Setup | n/a | n/a | approved 2026-10-16 | setup commit |
-| M1 | | | pending | |
+| M1 | PASS ([review](reviews/M1.md)) | 1 | approved 2026-10-17 | M1 commit |
+| M2 | | | pending | |

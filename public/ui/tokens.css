@@ -1,0 +1,95 @@
+/* Agent Office design tokens. Source: docs/redesign/00-design-system.md.
+   Put .ao-dark or .ao-light on <html> (theme.js does this). Any element works too, e.g. a gallery column.
+   Fonts: link Inter (wght 400..800, variable) and JetBrains Mono in the page head; system fonts are the fallback.
+   Colour rules: teal is the only accent. Amber ONLY means "an agent needs you". Red ONLY means errors and over-budget. */
+
+.ao-dark {
+  --bg: #0A1120; --bg-2: #0F192C;
+  --glass: rgba(15,25,44,.78); --glass-2: rgba(17,28,49,.96);
+  --line: rgba(140,170,210,.15); --line-2: rgba(140,170,210,.30); --hover: rgba(140,170,210,.08);
+  --text: #E8EEF8; --text-2: #AEBCD1; --text-3: #8A9BB4;
+  --teal: #2DD4BF; --teal-t: #5EEAD4; --teal-s: rgba(45,212,191,.14); --teal-btn: #2DD4BF; --on-teal: #032622;
+  --amber: #FBBF24; --amber-t: #FCD34D; --amber-s: rgba(251,191,36,.13); --amber-b: rgba(251,191,36,.45); --on-amber: #2A1A00;
+  --red: #F87171; --red-t: #FCA5A5; --red-s: rgba(248,113,113,.14);
+  --idle: #A9B6CB; --off: #8C9AAF; --code: #070D19;
+  /* not in the spec: depth */
+  --shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 12px 32px rgba(0,0,0,.35);
+  --shadow-pop: 0 18px 48px rgba(0,0,0,.55);
+  color-scheme: dark;
+}
+
+.ao-light {
+  --bg: #EDF1F7; --bg-2: #FFFFFF;
+  --glass: rgba(255,255,255,.84); --glass-2: rgba(255,255,255,.98);
+  --line: rgba(20,40,80,.11); --line-2: rgba(20,40,80,.22); --hover: rgba(20,40,80,.05);
+  --text: #0E1A2E; --text-2: #3E4E66; --text-3: #55657D;
+  --teal: #14B8A6; --teal-t: #0F766E; --teal-s: rgba(13,148,136,.11); --teal-btn: #0F766E; --on-teal: #FFFFFF;
+  --amber: #F59E0B; --amber-t: #8A3B07; --amber-s: rgba(245,158,11,.15); --amber-b: rgba(217,119,6,.5); --on-amber: #2A1A00;
+  --red: #DC2626; --red-t: #B91C1C; --red-s: rgba(220,38,38,.09);
+  --idle: #52637A; --off: #5F6E84; --code: #F3F6FA;
+  /* not in the spec: depth */
+  --shadow: 0 1px 2px rgba(20,40,80,.06), 0 10px 28px rgba(20,40,80,.08);
+  --shadow-pop: 0 16px 40px rgba(20,40,80,.18);
+  color-scheme: light;
+}
+
+:root {
+  /* Project room colours, same in both themes. Never amber, orange or red. Order matches PROJECT_COLORS in components.js. */
+  --proj-1: #A78BFA; /* violet */
+  --proj-2: #60A5FA; /* sky */
+  --proj-3: #A3E635; /* lime */
+  --proj-4: #F0ABFC; /* pink */
+  --proj-5: #818CF8; /* indigo */
+  --proj-6: #94A3B8; /* slate */
+  --on-proj: #0A1120; /* initials on a project colour */
+
+  --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* type scale: size + weight */
+  --fs-title: 26px; --fw-title: 800;  /* page title */
+  --fs-name: 20px;  --fw-name: 750;   /* agent name */
+  --fs-big: 30px;   --fw-big: 800;    /* big number */
+  --fs-panel: 14px; --fw-panel: 650;  /* panel title */
+  --fs-body: 14px;
+  --fs-meta: 12.5px;                  /* in --text-2 */
+  --fs-label: 11px; --fw-label: 600; --ls-label: .08em; /* uppercase, in --text-3 */
+  --fs-mono: 12.5px;
+
+  --r-panel: 14px; --r-btn: 9px; --r-pill: 999px;
+  --h-btn: 34px; /* buttons, chips, segmented, icon buttons */
+  --h-sm: 26px;  /* small controls: path chip, inline icon buttons */
+  --focus-w: 2px; --focus-off: 2px;
+  --blur: blur(18px) saturate(140%);
+}
+
+/* Touch screens: every control grows to 44px. */
+@media (pointer: coarse) {
+  :root { --h-btn: 44px; --h-sm: 44px; }
+}
+
+.ao-dark, .ao-light {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-body);
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+/* Controls inherit the UI font (and tabular numbers) instead of the browser default. */
+:where(.ao-dark, .ao-light) :where(button, input, select, textarea) { font: inherit; color: inherit; }
+
+/* 2px teal focus ring, offset 2px. --teal-t keeps it above 3:1 on light backgrounds. */
+:where(.ao-dark, .ao-light) :focus-visible {
+  outline: var(--focus-w) solid var(--teal-t);
+  outline-offset: var(--focus-off);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

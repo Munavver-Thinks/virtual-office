@@ -52,6 +52,10 @@ test("static files are served and path traversal is blocked", async () => {
   try {
     assert.equal((await fetch(base + "/")).status, 200);
     assert.equal((await fetch(base + "/app.js")).status, 200);
+    assert.equal((await fetch(base + "/ui/gallery.html")).status, 200);
+    const mod = await fetch(base + "/ui/components.js");
+    assert.equal(mod.status, 200);
+    assert.match(mod.headers.get("content-type"), /^text\/javascript/);
     assert.notEqual((await fetch(base + "/%2e%2e/package.json")).status, 200);
     assert.notEqual((await fetch(base + "/..%2fsrc%2fconfig.js")).status, 200);
   } finally { await app.close(); }
