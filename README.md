@@ -1,4 +1,4 @@
-# Agent Office
+# Virtual Office
 
 A live pixel office for your Claude Code sessions. Every `claude` session, in any folder or on any teammate's machine, appears as a person at a desk. Hover to see what it's doing, what it costs, and whether it needs you.
 
@@ -13,7 +13,7 @@ A live pixel office for your Claude Code sessions. Every `claude` session, in an
 ## Quick start
 
 ```bash
-git clone <your-repo> && cd agent-office
+git clone https://github.com/Munavver-Thinks/virtual-office.git && cd virtual-office
 npm run demo                 # fake agents at http://localhost:4380
 
 npm run install-hooks        # connect Claude Code (backs up ~/.claude/settings.json)
@@ -68,7 +68,7 @@ Each agent is named "<git project folder> · <2–3 words from your first prompt
 
 ## Privacy and security
 
-What the hook sends to your Agent Office server, per event:
+What the hook sends to your Virtual Office server, per event:
 
 - **With detail capture off, only names, paths and counts:**
   - names: the session id, machine and user name, `AGENT_NAME` if you set it, model, tool names and ids, notification and error types, how the session started and ended, the opened file's name, the slash command you typed, a 2–3 word label from your prompt (the agent's name), Claude's one-line name for each command, sub-agent and plan item, skill names and web page hosts
@@ -78,7 +78,7 @@ What the hook sends to your Agent Office server, per event:
 - **Turn detail capture off** per machine with `AGENT_OFFICE_DETAIL=0` in the environment that starts `claude`, or `"captureDetail": false` in `~/.agent-office/config.json` on that machine (`"false"`, `0`, `"off"` and `"no"` work too).
 - **How long it's kept:** data lives in `~/.agent-office/data` as daily files. Diffs and output tails are removed after 2 days, from memory and from the saved files. Everything else (names, paths, counts, plans, costs, prompts, commands and Claude's last message per turn) is deleted after 30 days.
 - All writes need the token. Settings changes are protected against cross-site requests.
-- Telemetry events go only to your Agent Office server, which keeps just the usage numbers. Claude Code leaves prompt text out of telemetry by default.
+- Telemetry events go only to your Virtual Office server, which keeps just the usage numbers. Claude Code leaves prompt text out of telemetry by default.
 - Cost figures come from Claude Code's telemetry and are estimates. For billing, check your Claude Console or cloud provider.
 
 ## Troubleshooting

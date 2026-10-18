@@ -1,5 +1,5 @@
 {
-  "name": "agent-office",
+  "name": "virtual-office",
   "version": "1.0.0",
   "description": "A live pixel office for your Claude Code sessions: status, cost, alerts and reports.",
   "license": "MIT",

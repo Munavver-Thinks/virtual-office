@@ -20,7 +20,7 @@ function ping(url) {
 
 async function main() {
   const major = Number(process.versions.node.split(".")[0]);
-  if (major < 18) { console.error(`Agent Office needs Node 18 or newer. You have ${process.versions.node}.`); process.exit(1); }
+  if (major < 18) { console.error(`Virtual Office needs Node 18 or newer. You have ${process.versions.node}.`); process.exit(1); }
 
   switch (cmd) {
     case "start":
@@ -55,7 +55,7 @@ async function main() {
     case "uninstall": {
       const file = inst.settingsPath();
       inst.writeSettings(file, inst.applyUninstall(inst.readSettings(file)));
-      console.log(`Agent Office removed from ${file}. Your data in ${config.paths().dir} was kept.`);
+      console.log(`Virtual Office removed from ${file}. Your data in ${config.paths().dir} was kept.`);
       break;
     }
 
@@ -88,7 +88,7 @@ async function main() {
     }
 
     default:
-      console.log(`Agent Office: a live office for your Claude Code sessions
+      console.log(`Virtual Office: a live office for your Claude Code sessions
 
 Usage: agent-office <command>
 

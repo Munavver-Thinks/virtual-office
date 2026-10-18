@@ -16,7 +16,7 @@
                SSE /api/stream  src/alerts.js   /api/report   /api/agents/:id · /api/timeline
                      │          (Slack/Discord)
                      ▼
-     public/ (app.js + office.js canvas; public/ui design system; public/lib/describe.js)
+     public/ (app.js + office3d.js 3D office; public/ui design system; public/lib/describe.js)
 ```
 
 ## Parts
@@ -36,7 +36,8 @@
 | `src/demo.js` | A deterministic demo day (3 projects, 8 agents) built from raw hook payloads through the real `build()`. |
 | `public/lib/describe.js` | Plain-English text for every action ("Edited Basket.tsx", "Wants permission to run a command"), icon keys, and the browser copy of `hooks/text.js`. |
 | `public/ui/` | Design tokens, base components, icons, formatters (M1). |
-| `public/office.js`, `public/app.js` | The current canvas office and list (replaced from M3). |
+| `public/office3d.js` | The 3D office (M3): an SVG isometric floor with a glass room per git project, characters as real buttons, pan, zoom and minimap. Pure layout and geometry in `office3d-model.js`, SVG drawing in `office3d-draw.js`. |
+| `public/app.js` | The current page shell: header, agent list, settings and report dialogs (replaced in M4). |
 
 `hooks/text.js` and `public/lib/describe.js` hold the same four functions because the hook must stay CommonJS on Node 18 and the browser needs ES modules, with no build step. `test/describe.test.js` runs both copies over the same inputs and fails if they ever disagree.
 
