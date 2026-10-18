@@ -31,6 +31,14 @@ test("money", async () => {
   assert.equal(f.money(NaN), "$0.00");
 });
 
+test("cost text says No cost data rather than $0.00 when nothing was reported", async () => {
+  const f = await load("format.js");
+  assert.equal(f.costText({ cost: 0, requests: 0 }), "No cost data");
+  assert.equal(f.costText({}), "No cost data");
+  assert.equal(f.costText({ cost: 0, requests: 3 }), "$0.00");
+  assert.equal(f.costText({ cost: 2.05, requests: 0 }), "$2.05", "cost from OTel without a request count still shows");
+});
+
 test("middle and end truncation", async () => {
   const f = await load("format.js");
   assert.equal(f.middleTruncate("/Users/me/projects/clients/supermarket-pos", 32), "/Users/me/…/supermarket-pos");
@@ -320,4 +328,77 @@ test("theme: system follows the OS, and a blocked storage falls back to dark", a
   assert.equal(t.resolveTheme("bogus", true), "dark");
   Object.defineProperty(globalThis, "localStorage", { configurable: true, get() { throw new Error("blocked"); } });
   try { assert.equal(t.themePref(), "dark"); } finally { delete globalThis.localStorage; }
+});
+
+// ---------- hover card behaviour (bind) ----------
+/** Just enough DOM for bind(): a tree of elements with attributes, classes, boxes and event listeners. */
+function fakeDom() {
+  const camel = (s) => s.replace(/-(\w)/g, (_, c) => c.toUpperCase());
+  class El {
+    constructor(attrs = {}, parent = null) {
+      Object.assign(this, { attrs, parent, hidden: false, style: {}, dataset: {}, offsetWidth: 200, offsetHeight: 80, offsetParent: null, id: attrs.id, handlers: {} });
+      for (const [k, v] of Object.entries(attrs)) if (k.startsWith("data-")) this.dataset[camel(k.slice(5))] = v;
+    }
+    matches(sel) {
+      return sel.split(",").some((s) => {
+        s = s.trim();
+        const m = /^\[([\w-]+)\]$/.exec(s);
+        return m ? m[1] in this.attrs : s.startsWith(".") && String(this.attrs.class || "").split(" ").includes(s.slice(1));
+      });
+    }
+    closest(sel) { for (let e = this; e; e = e.parent) if (e.matches(sel)) return e; return null; }
+    contains(el) { for (let e = el; e; e = e.parent) if (e === this) return true; return false; }
+    getBoundingClientRect() { return { left: 300, top: 300, right: 340, bottom: 340, width: 40, height: 40 }; }
+    addEventListener(t, fn) { (this.handlers[t] ||= []).push(fn); }
+    removeEventListener(t, fn) { this.handlers[t] = (this.handlers[t] || []).filter((f) => f !== fn); }
+    fire(t, e) { for (const fn of this.handlers[t] || []) fn({ preventDefault() {}, ...e }); }
+  }
+  const doc = new El();
+  const root = new El({}, null);
+  root.ownerDocument = doc;
+  const make = (attrs) => new El(attrs, root);
+  const els = { a: make({ "data-hovercard": "ca" }), b: make({ "data-hovercard": "cb" }), ca: make({ id: "ca" }), cb: make({ id: "cb" }) };
+  els.ca.hidden = els.cb.hidden = true;
+  doc.getElementById = (id) => els[id] || null;
+  doc.activeElement = null;
+  return { doc, root, ...els };
+}
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+test("hover card: Esc dismisses the focused anchor's card, and hovering another anchor doesn't bring it back", async () => {
+  const ui = await load("components.js");
+  const saved = globalThis.document;
+  globalThis.document = { documentElement: { clientWidth: 1000, clientHeight: 800 } };
+  const { doc, root, a, b, ca, cb } = fakeDom();
+  const unbind = ui.bind(root);
+  try {
+    doc.activeElement = a;
+    root.fire("focusin", { target: a });
+    assert.equal(ca.hidden, false, "focus opens the card");
+    root.fire("keydown", { key: "Escape", target: a });
+    assert.equal(ca.hidden, true, "Esc closes it");
+    root.fire("pointerover", { target: b });
+    assert.equal(cb.hidden, false, "hovering another anchor shows its card");
+    root.fire("pointerout", { target: b, relatedTarget: root });
+    await wait(200);
+    assert.equal(cb.hidden, true, "leaving hides it");
+    assert.equal(ca.hidden, true, "the dismissed card stays dismissed");
+    // Moving focus ends the dismissal: the newly focused anchor's card comes back after a hover elsewhere.
+    doc.activeElement = b;
+    root.fire("focusin", { target: b });
+    root.fire("pointerover", { target: a });
+    assert.equal(ca.hidden, false);
+    root.fire("pointerout", { target: a, relatedTarget: root });
+    await wait(200);
+    assert.equal(ca.hidden, true);
+    assert.equal(cb.hidden, false, "a focused anchor gets its card back");
+    // Hovering the dismissed anchor itself opens its card again.
+    root.fire("keydown", { key: "Escape", target: b });
+    assert.equal(cb.hidden, true);
+    root.fire("pointerover", { target: b });
+    assert.equal(cb.hidden, false);
+  } finally {
+    unbind();
+    globalThis.document = saved;
+  }
 });

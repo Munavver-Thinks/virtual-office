@@ -8,6 +8,8 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 var(--sans); }
+/* The theme class on <html> is for the office; this page keeps its light look (and light native dialogs and inputs) until M4. */
+html.ao-dark, html.ao-light { background: var(--paper); color-scheme: light; }
 button, input { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--working); outline-offset: 2px; }
 
@@ -26,10 +28,8 @@ header h1 { font: 20px var(--pixel); margin: 0; letter-spacing: .5px; }
 main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; padding: 16px; max-width: 1560px; margin: 0 auto; }
 @media (max-width: 960px) { main { grid-template-columns: 1fr; } .hbtns { margin-left: 0; } }
 
-#floor-wrap { position: relative; border: 4px solid var(--wall); border-radius: 6px; background: #8FA8B8; overflow: hidden; align-self: start; }
-#floor { display: block; width: 100%; height: auto; image-rendering: pixelated; }
-#tip { position: absolute; pointer-events: none; width: 290px; background: var(--card); border: 2px solid var(--wall); border-radius: 6px; padding: 10px 12px; font-size: 13px; line-height: 1.45; box-shadow: 4px 4px 0 rgba(46,64,87,.25); display: none; z-index: 2; }
-#tip h3 { margin: 0 0 2px; font: 13px var(--pixel); }
+/* The 3D office (office3d.css) fills this box. */
+#office { height: clamp(460px, calc(100vh - 110px), 940px); min-width: 0; }
 .kv { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 2px 8px; margin: 6px 0 0; }
 .kv dt { color: var(--ink-2); }
 .kv dd { margin: 0; font-family: var(--mono); font-size: 12px; word-break: break-all; }

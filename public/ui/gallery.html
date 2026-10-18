@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Component gallery · Agent Office</title>
+<title>Component gallery · Virtual Office</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%232DD4BF%27 stroke-width=%272%27 stroke-linejoin=%27round%27><path d=%27M12 2.8l8.5 4.9v8.6L12 21.2l-8.5-4.9V7.7zM3.5 7.7L12 12.6l8.5-4.9M12 12.6v8.6%27/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -188,7 +188,7 @@
 
   initTheme();
   document.getElementById("top").innerHTML = `<div class="g-brand">${icon("office", { size: 26 })}<div><h1 class="ao-title">Component gallery</h1>
-    <div class="ao-meta">Agent Office design system · the columns are pinned to each theme, the bar follows your choice</div></div></div>
+    <div class="ao-meta">Virtual Office design system · the columns are pinned to each theme, the bar follows your choice</div></div></div>
     <div class="g-tools"><span class="ao-label">Theme</span>${ui.themeSwitch()}${ui.themeToggle()}</div>`;
   for (const [p, name] of [["d", "Dark"], ["l", "Light"]]) {
     const col = document.getElementById(`col-${p}`);

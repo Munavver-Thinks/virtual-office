@@ -31,6 +31,11 @@ export function money(n, { trim = false } = {}) {
   return trim ? s.replace(/\.00$/, "") : s;
 }
 
+/** An agent's cost, or "No cost data" when no API request was ever reported (telemetry off), instead of a misleading $0.00. */
+export function costText({ cost, requests } = {}) {
+  return !num(requests) && !num(cost) ? "No cost data" : money(cost);
+}
+
 /** Keeps the start and the end: "/Users/me/…/supermarket-pos". Paths keep whole folder names. */
 export function middleTruncate(s, max = 36) {
   s = String(s ?? "");

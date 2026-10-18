@@ -320,21 +320,25 @@ function syncTheme(root, { pref, theme }) {
  *  Call once per root. Returns an unbind function. */
 export function bind(root = document) {
   const doc = root.ownerDocument || root;
-  let card = null, anchor = null, hideTimer = 0;
+  // dismissed = the focused anchor whose card Esc closed: it stays closed until focus moves or the pointer comes back to it.
+  let card = null, anchor = null, hideTimer = 0, dismissed = null;
   const inside = (el) => !!el && !!((anchor && anchor.contains(el)) || (card && card.contains(el)));
+  const focusedAnchor = () => doc.activeElement?.closest?.("[data-hovercard]") || null;
   const hide = () => { clearTimeout(hideTimer); if (card) card.hidden = true; card = anchor = null; };
-  // Pointer leaving never hides a card its focused anchor keeps open (WCAG 1.4.13); a focused anchor gets its card back.
+  // Pointer leaving never hides a card its focused anchor keeps open (WCAG 1.4.13); a focused anchor gets its card back,
+  // unless Esc dismissed it.
   const hideSoon = () => {
     clearTimeout(hideTimer);
     hideTimer = setTimeout(() => {
-      const focused = doc.activeElement?.closest?.("[data-hovercard]");
+      const focused = focusedAnchor();
       if (focused && focused === anchor) return;
       hide();
-      if (focused && root.contains(focused)) show(focused);
+      if (focused && focused !== dismissed && root.contains(focused)) show(focused);
     }, 150);
   };
   function show(a) {
     clearTimeout(hideTimer);
+    if (a === dismissed) dismissed = null;
     if (a === anchor) return;
     const c = doc.getElementById(a.dataset.hovercard);
     if (!c) return;
@@ -353,7 +357,7 @@ export function bind(root = document) {
     else setTheme(currentTheme() === "dark" ? "light" : "dark");
   };
   const onKey = (e) => {
-    if (e.key === "Escape" && card) return hide();
+    if (e.key === "Escape" && card) { dismissed = focusedAnchor(); return hide(); }
     const opt = e.target.closest?.(".ao-seg-opt");
     if (opt) segKey(e, opt);
   };
@@ -362,7 +366,7 @@ export function bind(root = document) {
     if (a) show(a); else if (inside(e.target)) clearTimeout(hideTimer);
   };
   const onOut = (e) => { if (card && inside(e.target) && !inside(e.relatedTarget)) hideSoon(); };
-  const onFocusIn = (e) => { const a = e.target.closest?.("[data-hovercard]"); if (a) show(a); };
+  const onFocusIn = (e) => { dismissed = null; const a = e.target.closest?.("[data-hovercard]"); if (a) show(a); };
   const onFocusOut = (e) => { if (card && anchor.contains(e.target) && !inside(e.relatedTarget)) hide(); };
   const onSegment = (e) => { if (e.target.closest?.("[data-theme-switch]")) setTheme(e.detail.value); };
   const onTheme = (e) => syncTheme(root, e.detail);

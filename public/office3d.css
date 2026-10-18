@@ -1,0 +1,165 @@
+/* The 3D office (office3d.js). Needs tokens.css and components.css first.
+   The office root carries .ao-dark or .ao-light itself, so it works on any page. */
+
+.o3 {
+  position: relative; height: 100%; min-height: 360px; overflow: hidden; box-sizing: border-box;
+  border: 1px solid var(--line); border-radius: var(--r-panel);
+  font-family: var(--font-ui); color: var(--text);
+  user-select: none; -webkit-user-select: none; touch-action: none; cursor: grab; outline: none;
+}
+.o3.ao-dark { background: radial-gradient(110% 85% at 50% 38%, #15233F 0%, #0D1628 55%, #0A1120 100%); }
+.o3.ao-light { background: radial-gradient(110% 85% at 50% 38%, #FFFFFF 0%, #EEF3F9 55%, #E2E9F2 100%); }
+.o3:focus-visible { box-shadow: inset 0 0 0 2px var(--teal-t); }
+.o3.is-dragging { cursor: grabbing; }
+
+.o3-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; --tag-s: 1; --iz: 1; }
+.o3.is-moving .o3-world { will-change: transform; }
+.o3-world > svg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+/* The floor (with its blur filters) gets its own layer, and so does a walking person's tag, so walking never repaints them. */
+.o3-floor, .o3-a.is-walking { will-change: transform; }
+.o3-labels, .o3-itags, .o3-agents { position: absolute; inset: 0; margin: 0; padding: 0; list-style: none; pointer-events: none; }
+
+/* ---------- glass labels: rooms, lounge, hall, the Needs You sign, entrance ---------- */
+.o3-lbl {
+  position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: auto;
+  display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 11px;
+  border: 1px solid var(--line-2); border-radius: var(--r-pill); background: var(--glass-2); color: var(--text);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .28); font: 600 12.5px/1 var(--font-ui); white-space: nowrap; text-decoration: none;
+}
+.ao-light .o3-lbl { box-shadow: 0 4px 14px rgba(20, 40, 80, .12); }
+.o3-lbl > .ao-icon { color: var(--text-2); }
+.o3-lbl-n { color: var(--text-2); font-weight: 500; }
+.o3-room, .o3-hall-lbl { cursor: pointer; }
+/* Long project names end in an ellipsis; the full name is in the aria-label and title. */
+.o3-room b { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; }
+@media (pointer: coarse) { .o3-room, .o3-hall-lbl { height: 50px; padding: 0 16px; } }
+.o3-room:hover, .o3-hall-lbl:hover { border-color: var(--teal); }
+.o3-hall-lbl > .ao-icon { color: var(--teal-t); }
+.o3-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+.o3-caps { height: 24px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-2); }
+.o3-sign { height: 24px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-2); }
+/* Amber only while someone waits on you. */
+.o3-sign.is-on { background: var(--amber); border-color: var(--amber); color: var(--on-amber); box-shadow: 0 0 0 4px var(--amber-s), 0 6px 18px rgba(0, 0, 0, .3); }
+.o3-sign.is-on > .ao-icon { color: var(--on-amber); }
+
+/* ---------- characters: a real button over each one, with its name tag on top ---------- */
+.o3-a { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
+.o3-agent {
+  position: absolute; left: 0; bottom: 0; transform: translateX(-50%);
+  width: var(--bw); height: calc(var(--bh) + 26px * var(--tag-s)); margin: 0; padding: 0;
+  border: 0; border-radius: calc(10px * var(--iz)); background: transparent; cursor: pointer; pointer-events: auto;
+}
+/* Touch: at least 44px on screen at any zoom. */
+@media (pointer: coarse) { .o3-agent { min-width: calc(44px * var(--iz)); min-height: calc(44px * var(--iz)); } }
+/* The ring is 2px on screen at any zoom, and wraps the character and its tag. */
+.o3-agent:focus-visible { outline: calc(var(--focus-w) * var(--iz)) solid var(--teal-t); outline-offset: calc(var(--focus-off) * var(--iz)); }
+/* --lift = place in the Needs You queue: zoomed out, later tags rise a little more so they don't stack on each other. */
+.o3-tag {
+  position: absolute; left: 50%; top: 0; transform-origin: 0 0;
+  transform: scale(var(--tag-s)) translateX(-50%) translateY(calc(var(--lift, 0) * var(--qgap, 0px) * -1));
+  height: 21px; padding: 0 8px; gap: 4px; font-size: 11.5px; pointer-events: none; box-shadow: 0 4px 12px rgba(0, 0, 0, .3);
+}
+.ao-light .o3-tag { box-shadow: 0 3px 10px rgba(20, 40, 80, .14); }
+/* Needs-you tags are solid amber, like the reference: the one thing in the office to look at first. */
+.o3-tag.ao-pill--needs { background: var(--amber); border-color: var(--amber); color: var(--on-amber); }
+.o3-tag > span { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; }
+/* Zoomed far out only the first in the Needs You queue keeps a tag (the sign has the count). */
+.o3.no-tags .o3-tag, .o3.is-far .o3-a:not(.is-lead) .o3-tag, .o3.no-tags .o3-itag, .o3.is-far .o3-itag { display: none; }
+
+/* Interns' tags: what each sub-agent does; running = working pill, finished = neutral with a teal check. */
+.o3-itag {
+  position: absolute; left: 0; top: 0; transform-origin: 0 0; height: 18px; padding: 0 7px; gap: 4px;
+  font-size: 10.5px; box-shadow: 0 3px 10px rgba(0, 0, 0, .28);
+}
+.o3-itag > span { max-width: 26ch; overflow: hidden; text-overflow: ellipsis; }
+.o3-itag--done { color: var(--text-2); background: linear-gradient(var(--hover), var(--hover)), var(--bg-2); border-color: var(--line-2); }
+.o3-itag--done > .ao-icon { color: var(--teal-t); }
+.o3-a.is-pulse .o3-tag { animation: o3-pulse .7s ease-in-out 3; }
+@keyframes o3-pulse { 50% { box-shadow: 0 0 0 6px var(--teal-s), 0 0 0 2px var(--teal); } }
+
+/* ---------- hover card ---------- */
+.o3-hovercard { width: 280px; }
+.o3-card { display: grid; gap: 8px; min-width: 0; }
+.o3-card-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.o3-card-id { min-width: 0; }
+.o3-card-name { font-size: 14px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.o3-card-act { display: flex; gap: 6px; align-items: flex-start; }
+.o3-card-act > .ao-icon { margin-top: 2px; color: var(--text-2); }
+.o3-card-target {
+  display: block; padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--code);
+  font: var(--fs-mono)/1.4 var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.o3-card-plan { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; }
+.o3-card-num { font-size: 12.5px; font-weight: 650; }
+.o3-card-sub { display: grid; gap: 3px; min-width: 0; }
+.o3-card-subrow { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12.5px; }
+.o3-card-subrow > .ao-icon { color: var(--teal-t); }
+.o3-card-subrow > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.o3-card-foot { display: flex; justify-content: space-between; align-items: baseline; padding-top: 6px; border-top: 1px solid var(--line); }
+
+/* ---------- HUD, zoom, minimap, hint, empty office ---------- */
+.o3-hud, .o3-zoom, .o3-map {
+  position: absolute; z-index: 5; background: var(--glass); border: 1px solid var(--line);
+  -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); box-shadow: var(--shadow);
+}
+.o3-hud { left: 14px; top: 14px; display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 13px; border-radius: 10px; font-size: 13px; pointer-events: none; }
+.o3-hud-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 0 3px var(--teal-s); }
+.o3.is-replay .o3-hud-dot, .o3.is-loading .o3-hud-dot, .o3.is-stale .o3-hud-dot { background: var(--text-3); box-shadow: 0 0 0 3px var(--hover); }
+/* Stale or error: the last data stays, dimmed and still, with "As of 15:40" (or the error) in the HUD. Red only for the error. */
+.o3.is-stale .o3-hud { border-style: dashed; border-color: var(--line-2); }
+.o3.is-error .o3-hud-dot { background: var(--red); box-shadow: 0 0 0 3px var(--red-s); }
+.o3.is-error .o3-hud-mode { color: var(--red-t); }
+.o3.is-stale .o3-world, .o3.is-error .o3-world { opacity: .55; }
+.o3.is-stale .o3-world *, .o3.is-error .o3-world * { animation-play-state: paused !important; }
+.o3-hud-meta { color: var(--text-2); }
+.o3-zoom { right: 14px; bottom: 40px; display: flex; flex-direction: column; gap: 2px; padding: 4px; border-radius: 12px; }
+.o3-hint { position: absolute; right: 16px; bottom: 12px; margin: 0; font-size: 12px; color: var(--text-2); pointer-events: none; }
+.o3-map { left: 14px; bottom: 14px; padding: 8px 6px 4px; border-radius: 12px; cursor: pointer; }
+.o3-map-head { display: flex; justify-content: space-between; align-items: baseline; padding: 0 6px 4px; }
+.o3-map-hint { font-size: 11px; color: var(--text-2); }
+.o3-map-svg { display: block; }
+.o3-map-view { fill: var(--teal-s); stroke: var(--teal-t); stroke-width: 1.2; }
+.o3-empty { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+.o3-empty > * { pointer-events: auto; }
+.o3-empty > .ao-state, .o3-loading { max-width: 360px; border: 1px solid var(--line); border-radius: var(--r-panel); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+.o3-empty > .ao-state--empty, .o3-loading { background: var(--glass); }
+.o3-loading { width: 320px; padding: 12px 16px; }
+@media (max-width: 700px) { .o3-map, .o3-hint { display: none; } }
+
+/* ---------- scene bits styled from CSS ---------- */
+.o3-link { fill: none; stroke: var(--teal); stroke-width: 1.4; stroke-dasharray: 4 4; stroke-linecap: round; animation: o3-dash 1s linear infinite; }
+.o3-more { font: 600 11px var(--font-ui); fill: var(--text-2); }
+.o3-steam-g { color: var(--text-3); }
+
+/* ---------- ambient motion (all off with reduced motion, see tokens.css) ---------- */
+.o3-pose-seat .o3-hand-l, .o3-desk .o3-hand-l { animation: o3-type .34s steps(2, jump-none) infinite; }
+.o3-pose-seat .o3-hand-r, .o3-desk .o3-hand-r { animation: o3-type .34s steps(2, jump-none) infinite reverse; }
+.o3-pose-walk .o3-leg-l { animation: o3-type .3s steps(2, jump-none) infinite; }
+.o3-pose-walk .o3-leg-r { animation: o3-type .3s steps(2, jump-none) infinite reverse; }
+.o3-pose-cup .o3-body { animation: o3-bob 2.6s ease-in-out infinite; }
+.o3-wave { transform-box: fill-box; transform-origin: 50% 100%; animation: o3-wave 1.1s ease-in-out infinite; }
+.o3-halo { transform-box: fill-box; transform-origin: center; animation: o3-halo 1.6s ease-out infinite; }
+.o3-sway { transform-box: fill-box; transform-origin: 50% 100%; animation: o3-sway 3.8s ease-in-out infinite; }
+.o3-steam { opacity: 0; animation: o3-steam 2.4s ease-out infinite; }
+.o3-steam-2 { animation-delay: .8s; }
+.o3-steam-3 { animation-delay: 1.6s; }
+.o3-hud-dot { animation: o3-live 2.4s ease-in-out infinite; }
+.o3:not(.is-live) .o3-hud-dot, .o3.is-replay .o3-hud-dot { animation: none; }
+
+@keyframes o3-type { from { transform: translateY(0); } to { transform: translateY(-1.5px); } }
+@keyframes o3-bob { 50% { transform: translateY(-2px); } }
+@keyframes o3-wave { 0%, 100% { transform: rotate(-12deg); } 50% { transform: rotate(16deg); } }
+@keyframes o3-halo { from { transform: scale(.6); opacity: .95; } to { transform: scale(1.45); opacity: 0; } }
+@keyframes o3-sway { 0%, 100% { transform: rotate(-2.5deg); } 50% { transform: rotate(2.5deg); } }
+@keyframes o3-steam { 0% { transform: translateY(4px); opacity: 0; } 30% { opacity: .7; } 100% { transform: translateY(-12px); opacity: 0; } }
+@keyframes o3-dash { to { stroke-dashoffset: -16; } }
+@keyframes o3-live { 50% { box-shadow: 0 0 0 5px var(--teal-s); } }
+
+/* Hidden tab: stop every ambient animation. */
+.o3.o3-paused, .o3.o3-paused * { animation-play-state: paused !important; }
+
+/* Reduced motion: tokens.css already stops animation; glows stay, steam goes. */
+@media (prefers-reduced-motion: reduce) {
+  .o3-steam { display: none; }
+  .o3-halo { opacity: .8; }
+}

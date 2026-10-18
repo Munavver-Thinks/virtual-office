@@ -3,15 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Agent office</title>
+<title>Virtual office</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%232E4057'/><rect x='3' y='4' width='10' height='6' fill='%233B5470'/><rect x='5' y='11' width='6' height='2' fill='%232E9E6B'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono&family=Inter:wght@400..800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/ui/tokens.css">
+<link rel="stylesheet" href="/ui/components.css">
+<link rel="stylesheet" href="/office3d.css">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <header>
-  <h1>Agent office</h1>
+  <h1>Virtual office</h1>
   <div class="stats" aria-live="polite">
     <span><i class="dot" style="background:var(--working)"></i><b id="c-working">0</b> working</span>
     <span><i class="dot" style="background:var(--waiting)"></i><b id="c-waiting">0</b> need you</span>
@@ -20,16 +23,14 @@
     <span><b id="c-tokens">0</b> tokens</span>
   </div>
   <div class="hbtns">
+    <button class="hbtn" id="theme">Light theme</button>
     <button class="hbtn" id="open-report">Cost report</button>
     <button class="hbtn" id="open-settings">Settings</button>
   </div>
 </header>
 
 <main>
-  <div id="floor-wrap">
-    <canvas id="floor" role="img" aria-label="Office floor. Each Claude Code session is a person. Working agents sit at desks, idle agents rest in the break area."></canvas>
-    <div id="tip" role="tooltip"></div>
-  </div>
+  <div id="office"></div>
   <aside>
     <div id="banner"></div>
     <h2>Agents</h2>

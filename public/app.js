@@ -1,4 +1,5 @@
-import { Office, COLORS } from "/office.js";
+import { createOffice } from "/office3d.js";
+import { initTheme, setTheme, currentTheme } from "/ui/theme.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -6,6 +7,7 @@ const money = (n) => "$" + (n || 0).toFixed(2);
 const tokens = (n) => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? Math.round(n / 1e3) + "k" : String(Math.round(n || 0));
 const totalTok = (t) => (t.input || 0) + (t.output || 0) + (t.cacheRead || 0) + (t.cacheWrite || 0);
 const LABEL = { working: "Working", waiting: "Needs you", idle: "Idle", offline: "Offline" };
+const COLORS = { working: "#2E9E6B", waiting: "#D9931C", idle: "#8A97A3", offline: "#C3CBD2" };
 function ago(iso) {
   const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
   return s < 60 ? s + "s ago" : s < 3600 ? Math.round(s / 60) + "m ago" : Math.round(s / 3600) + "h ago";
@@ -18,43 +20,20 @@ async function api(path, opts = {}) {
   return data;
 }
 
-let state = { agents: [], totals: {} }, settings = {}, selectedId = null, hoverAgent = null, lastMouse = null;
+let state = { agents: [], totals: {} }, settings = {}, selectedId = null;
 const prevStates = new Map();
 
-// ---------- office + tooltip ----------
-const tip = $("tip"), wrap = $("floor-wrap");
-const office = new Office($("floor"), {
-  onHover(agent, e) { hoverAgent = agent; if (e) lastMouse = e; showTip(); },
-  onClick(id) { select(id === selectedId ? null : id); },
-});
-
-function tipHtml(a) {
-  return `<h3>${esc(a.name)}</h3>
-    <div style="color:${COLORS[a.state]};font-weight:500">${LABEL[a.state]}${a.message ? ": " + esc(a.message) : ""}</div>
-    <dl class="kv">
-      <dt>Task</dt><dd>${esc(a.task || "No prompt yet")}</dd>
-      <dt>Tool</dt><dd>${esc(a.tool || "-")}</dd>
-      <dt>Target</dt><dd>${esc(a.target || "-")}</dd>
-      <dt>Folder</dt><dd>${esc(a.folder || "-")}</dd>
-      ${a.host ? `<dt>Machine</dt><dd>${esc(a.user ? a.user + "@" : "")}${esc(a.host)}</dd>` : ""}
-      <dt>Cost</dt><dd>${money(a.cost)} · ${tokens(totalTok(a.tokens))} tokens</dd>
-      ${a.model ? `<dt>Model</dt><dd>${esc(a.model)}</dd>` : ""}
-      <dt>Updated</dt><dd>${ago(a.updated)}</dd>
-    </dl>`;
-}
-function showTip() {
-  if (!hoverAgent || !lastMouse) { tip.style.display = "none"; return; }
-  const a = state.agents.find((x) => x.session === hoverAgent.session) || hoverAgent;
-  tip.innerHTML = tipHtml(a); tip.style.display = "block";
-  const wr = wrap.getBoundingClientRect();
-  let left = lastMouse.clientX - wr.left + 16, top = lastMouse.clientY - wr.top + 16;
-  if (left + 300 > wr.width) left = Math.max(4, lastMouse.clientX - wr.left - 306);
-  if (top + tip.offsetHeight > wr.height) top = Math.max(4, wr.height - tip.offsetHeight - 4);
-  tip.style.left = left + "px"; tip.style.top = top + "px";
-}
+// ---------- office (public/office3d.js) ----------
+initTheme();
+const office = createOffice($("office"), { onSelect(id) { select(id === selectedId ? null : id); }, onRetry: load });
+const themeBtn = $("theme");
+const syncThemeBtn = () => { themeBtn.textContent = currentTheme() === "dark" ? "Light theme" : "Dark theme"; };
+themeBtn.onclick = () => { setTheme(currentTheme() === "dark" ? "light" : "dark"); syncThemeBtn(); };
+syncThemeBtn();
+const drawOffice = () => office.update(state.agents, { offlineAfterMin: settings.offlineAfterMin });
 
 // ---------- side list ----------
-function select(id) { selectedId = id; office.selectedId = id; renderList(); }
+function select(id) { selectedId = id; renderList(); }
 
 function line(a) {
   if (a.state === "waiting") return a.message || "Waiting for you";
@@ -122,7 +101,7 @@ function renderHeader() {
   $("c-cost").textContent = money(t.todayCost);
   $("c-cost").className = settings.dailyBudgetUsd && t.todayCost >= settings.dailyBudgetUsd ? "over" : "";
   $("c-tokens").textContent = tokens(t.todayTokens || 0);
-  document.title = t.waiting ? `(${t.waiting}) Agent office` : "Agent office";
+  document.title = t.waiting ? `(${t.waiting}) Virtual office` : "Virtual office";
   const b = [];
   if (settings.demo) b.push(`<p class="banner">Demo data. Run <code>agent-office start</code> to see your real sessions.</p>`);
   if (settings.dailyBudgetUsd && t.todayCost >= settings.dailyBudgetUsd) b.push(`<p class="banner bad">Today's spend ${money(t.todayCost)} is over your ${money(settings.dailyBudgetUsd)} budget.</p>`);
@@ -146,14 +125,15 @@ function notify() {
 let online = true;
 function apply(snap) {
   state = snap; online = true;
-  office.setAgents(state.agents);
-  notify(); renderHeader(); renderList(); showTip();
+  drawOffice();
+  notify(); renderHeader(); renderList();
 }
 function connect() {
   const es = new EventSource("/api/stream");
   es.onmessage = (m) => apply(JSON.parse(m.data));
-  es.onerror = () => { online = false; renderHeader(); };
-  es.onopen = () => { online = true; renderHeader(); };
+  // The office shows "As of <last data>" while the stream is down, and Live again once it reconnects.
+  es.onerror = () => { online = false; renderHeader(); if (state.t) office.setStatus("stale", state.t); };
+  es.onopen = () => { online = true; renderHeader(); if (state.t) office.setStatus("live"); };
 }
 
 // ---------- settings dialog ----------
@@ -214,8 +194,13 @@ $("open-report").onclick = async () => {
 };
 
 // ---------- start ----------
+async function load() {
+  try { const s = await api("/api/state"); settings = s.settings; apply(s); office.setStatus("live"); }
+  catch { if (!state.t) office.setStatus("error"); }
+}
+
 (async () => {
-  try { const s = await api("/api/state"); settings = s.settings; apply(s); } catch {}
+  await load();
   connect();
-  setInterval(() => { renderList(); showTip(); }, 10000);
+  setInterval(() => { renderList(); drawOffice(); }, 10000);
 })();

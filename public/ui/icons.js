@@ -32,6 +32,11 @@ export const ICONS = {
   board: '<rect x="3" y="3.5" width="18" height="17" rx="2"/><path d="M8 7.5v7M12 7.5v4M16 7.5v9"/>',
   meeting: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 4.8a3.2 3.2 0 0 1 0 6.4M18 14.2a6 6 0 0 1 3 5.8"/>',
   chart: '<path d="M3.5 3.5v17h17"/><path d="M8 16.5v-5M12.5 16.5v-9M17 16.5v-3"/>',
+  // map controls
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  minus: '<path d="M5 12h14"/>',
+  fit: '<path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/>',
+  door: '<path d="M5 21V4.5A1.5 1.5 0 0 1 6.5 3h11A1.5 1.5 0 0 1 19 4.5V21M3 21h18"/><path d="M14.5 12.5h.01"/>',
 };
 
 /** SVG markup for an icon. Unknown names render nothing. */
