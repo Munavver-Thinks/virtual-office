@@ -157,7 +157,7 @@ function createServer(opts = {}) {
       let body = {};
       try { body = JSON.parse(await readBody(req)); } catch { return send(res, 400, { error: "Body must be JSON." }); }
       if (url.pathname.endsWith("test-webhook")) {
-        const ok = await sendWebhook(String(body.webhookUrl || cfg.webhookUrl), "✅ Agent Office test alert. Webhook works.");
+        const ok = await sendWebhook(String(body.webhookUrl || cfg.webhookUrl), "✅ Virtual Office test alert. Webhook works.");
         return send(res, ok ? 200 : 502, ok ? { ok } : { error: "The webhook didn't accept the message. Check the URL." });
       }
       const r = config.applySettings(cfg, body);
@@ -169,7 +169,9 @@ function createServer(opts = {}) {
     }
 
     if (req.method !== "GET" && req.method !== "HEAD") return send(res, 404, { error: "Not found." });
-    const rel = url.pathname === "/" ? "index.html" : decodeURIComponent(url.pathname).replace(/^[/\\]+/, "");
+    let rel;
+    try { rel = url.pathname === "/" ? "index.html" : decodeURIComponent(url.pathname).replace(/^[/\\]+/, ""); }
+    catch { return send(res, 400, { error: "Bad path." }); } // malformed %-encoding
     const file = path.resolve(PUBLIC, rel);
     if (!file.startsWith(PUBLIC + path.sep)) return send(res, 403, { error: "Forbidden." });
     fs.readFile(file, (err, data) => {
@@ -198,7 +200,7 @@ function start(opts = {}) {
   const { port, host } = app.runtime;
   app.server.listen(port, host, () => {
     const shown = LOOPBACK.has(host) ? "localhost" : host;
-    console.log(`Agent Office is running at http://${shown}:${port}${opts.demo ? "  (demo data)" : ""}`);
+    console.log(`Virtual Office is running at http://${shown}:${port}${opts.demo ? "  (demo data)" : ""}`);
     if (!opts.demo) console.log(`Loaded ${app.replayed} saved events from ${config.paths(opts.dir).data}`);
     if (!app.openUI) console.log("Team mode: the dashboard asks for the token. Run `agent-office token` to see it.");
   });

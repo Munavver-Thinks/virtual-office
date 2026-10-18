@@ -56,8 +56,12 @@ test("static files are served and path traversal is blocked", async () => {
     const mod = await fetch(base + "/ui/components.js");
     assert.equal(mod.status, 200);
     assert.match(mod.headers.get("content-type"), /^text\/javascript/);
-    assert.notEqual((await fetch(base + "/%2e%2e/package.json")).status, 200);
+    // fetch() normalises "/%2e%2e/" away, so also send raw paths. (public/ has its own package.json for ESM.)
+    assert.notEqual((await fetch(base + "/%2e%2e/README.md")).status, 200);
     assert.notEqual((await fetch(base + "/..%2fsrc%2fconfig.js")).status, 200);
+    const raw = (p) => new Promise((resolve, reject) => require("http").get(base + "/", { path: p }, (res) => { res.resume(); resolve(res.statusCode); }).on("error", reject));
+    assert.equal(await raw("/%E0%A4%A"), 400, "a malformed %-encoding is a bad request, not a server error");
+    for (const p of ["/../README.md", "/ui/../../src/config.js", "/..%5csrc%5cconfig.js", "/..%2f..%2fpackage.json"]) assert.notEqual(await raw(p), 200, p);
   } finally { await app.close(); }
 });
 

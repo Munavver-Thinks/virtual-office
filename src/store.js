@@ -79,6 +79,15 @@ function leanStep(x) {
   if (text) rest.text = text.length > 200 ? text.slice(0, 199) + "…" : text;
   return rest;
 }
+/** Sub-agent counts plus the first three (running ones first) for the office's interns: id, short description, status. */
+function leanSubagents(list) {
+  const running = list.filter((x) => x.status === "running"), finished = list.filter((x) => x.status === "finished");
+  const short = (t) => (t && t.length > 60 ? t.slice(0, 59) + "…" : t || null);
+  return {
+    running: running.length, finished: finished.length,
+    list: [...running, ...finished.reverse()].slice(0, 3).map((x) => ({ id: x.id, description: short(x.description || x.type), status: x.status })),
+  };
+}
 function leanQuestion(q) {
   const { id, t, qkind, tool, target, detail, message, notificationType, agentId } = q;
   return { id, t, qkind, tool, target, detail, message, notificationType, agentId };
@@ -613,7 +622,7 @@ class Store extends EventEmitter {
       // false when the agent never wrote a plan (newer models only plan with CLAUDE_CODE_ENABLE_TODO_TOOLS=1)
       hasPlan: s.plan.items.length + s.plan.earlier.length > 0,
       plan: { ...plans.counts(s.plan, today, localDate), now: plans.current(s.plan) },
-      subagents: { running: s.subagents.filter((x) => x.status === "running").length, finished: s.subagents.filter((x) => x.status === "finished").length },
+      subagents: leanSubagents(s.subagents),
       recent: s.trace.slice(-RECENT).map(leanStep),
       today: todayTotals,
     };

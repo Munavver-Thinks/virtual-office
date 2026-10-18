@@ -245,6 +245,20 @@ test("plan from TaskCreate / TaskUpdate (Claude Code's default task tools)", () 
   assert.equal(p.items[0].completedAt, at(9));
 });
 
+test("snapshot sub-agents stay lean: counts plus at most 3, running first, descriptions cut to 60", () => {
+  const s = mk(), at = clock();
+  const long = "Check every receipt template for the cut-off last line and the paper feed settings";
+  for (let i = 0; i < 5; i++) {
+    hook(s, at(i), "PreToolUse", { tool: "Agent", toolUseId: `a${i}`, detail: { description: i === 4 ? long : `Job ${i}`, subagentType: "Explore" } });
+    hook(s, at(i, 1), "SubagentStart", { agentId: `ag-${i}`, agentType: "Explore" });
+  }
+  for (const i of [0, 1, 2]) hook(s, at(9, i), "SubagentStop", { agentId: `ag-${i}`, agentType: "Explore" });
+  const sub = s.agents()[0].subagents;
+  assert.deepEqual([sub.running, sub.finished], [2, 3]);
+  assert.deepEqual(sub.list.map((x) => [x.description, x.status]), [["Job 3", "running"], [long.slice(0, 59) + "…", "running"], ["Job 2", "finished"]]);
+  assert.ok(sub.list.every((x) => x.id && Object.keys(x).length === 3), "only id, description and status");
+});
+
 test("sub-agent tree: Agent calls link to SubagentStart/Stop, nested steps carry agentId", () => {
   const s = mk(), at = clock();
   hook(s, at(0), "PreToolUse", { tool: "Agent", toolUseId: "a1", detail: { description: "Explore loyalty rules", subagentType: "Explore" } });
@@ -264,7 +278,8 @@ test("sub-agent tree: Agent calls link to SubagentStart/Stop, nested steps carry
     ["ag-explore", "Explore", "Explore loyalty rules", "finished", at(6), "Discounts stack per line."]);
   assert.deepEqual([tests.agentId, tests.status, tests.background], ["ag-tests", "running", true], "a background launch returning doesn't finish it");
   assert.equal(d.trace.find((x) => x.toolUseId === "r1").agentId, "ag-explore");
-  assert.deepEqual(s.agents()[0].subagents, { running: 1, finished: 1 });
+  assert.deepEqual(s.agents()[0].subagents, { running: 1, finished: 1, list: [
+    { id: tests.id, description: "Write bill tests", status: "running" }, { id: explore.id, description: "Explore loyalty rules", status: "finished" }] });
   const f = d.files.find((x) => x.rel === "test/bill.test.ts");
   assert.deepEqual([f.edits, f.added, f.created, f.createdBy], [1, 12, true, "ag-tests"]);
   // Older Claude Code: no SubagentStart, so the Task call's own lifetime is the sub-agent's.
@@ -750,7 +765,7 @@ test("a restart clears sub-agents too: their questions, running steps and runnin
   assert.equal(s.agents()[0].state, "waiting", "compact changes nothing");
   hook(s, at(4), "SessionStart", { source: "startup" });
   const a = s.agents()[0], d = s.detail("a");
-  assert.deepEqual([a.state, a.question, a.subagents], ["idle", null, { running: 0, finished: 1 }]);
+  assert.deepEqual([a.state, a.question, a.subagents.running, a.subagents.finished, a.subagents.list.length], ["idle", null, 0, 1, 1]);
   assert.equal(d.conversation.find((x) => x.kind === "question").resolvedBy, "session-start");
   assert.equal(d.trace.find((x) => x.toolUseId === "b1").status, "unknown");
   assert.deepEqual([d.subagents[0].status, d.subagents[0].finishedAt], ["finished", at(4)]);

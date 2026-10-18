@@ -35,7 +35,9 @@ test("demo: 3 projects, 8 agents, 2 need you, 1 offline machine, plans 26 of 50"
   assert.equal(by("login fix").state, "idle");
   assert.equal(by("webhook retries").state, "offline"); assert.equal(by("webhook retries").host, "build-server");
   assert.deepEqual(agents.filter((a) => a.state !== "offline").every((a) => a.host !== "build-server"), true, "the offline agent is alone on its machine");
-  assert.deepEqual(by("basket bill").subagents, { running: 1, finished: 1 });
+  const sub = by("basket bill").subagents;
+  assert.deepEqual([sub.running, sub.finished, sub.list.map((x) => [x.description, x.status])],
+    [1, 1, [["Write bill tests", "running"], ["Explore loyalty rules", "finished"]]], "interns get the reference image tags");
   assert.equal(by("basket bill").name, "supermarket-pos · basket bill");
   assert.deepEqual(Object.fromEntries(["supermarket-pos", "checkout-api", "docs-site"].map((p) => {
     const list = agents.filter((a) => a.project === p);
