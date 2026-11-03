@@ -65,6 +65,8 @@
 .o3-tag > span { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; }
 /* Zoomed far out only the first in the Needs You queue keeps a tag (the sign has the count). */
 .o3.no-tags .o3-tag, .o3.is-far .o3-a:not(.is-lead) .o3-tag, .o3.no-tags .o3-itag, .o3.is-far .o3-itag { display: none; }
+/* Settings' Show name tags off (ui/prefs.js). */
+.ao-no-tags .o3-tag, .ao-no-tags .o3-itag { display: none; }
 
 /* Interns' tags: what each sub-agent does; running = working pill, finished = neutral with a teal check. */
 .o3-itag {
@@ -82,7 +84,9 @@
 .o3-card { display: grid; gap: 8px; min-width: 0; }
 .o3-card-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .o3-card-id { min-width: 0; }
-.o3-card-name { font-size: 14px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The card is where a cut-short tag is read in full: the name, project · machine and sub-agents wrap, never cut. */
+.o3-card-name, .o3-card-id > .ao-meta, .o3-card-subrow > span { overflow-wrap: anywhere; }
+.o3-card-name { font-size: 14px; font-weight: 650; }
 .o3-card-act { display: flex; gap: 6px; align-items: flex-start; }
 .o3-card-act > .ao-icon { margin-top: 2px; color: var(--text-2); }
 .o3-card-target {
@@ -92,9 +96,9 @@
 .o3-card-plan { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; }
 .o3-card-num { font-size: 12.5px; font-weight: 650; }
 .o3-card-sub { display: grid; gap: 3px; min-width: 0; }
-.o3-card-subrow { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12.5px; }
-.o3-card-subrow > .ao-icon { color: var(--teal-t); }
-.o3-card-subrow > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.o3-card-subrow { display: flex; align-items: flex-start; gap: 6px; min-width: 0; font-size: 12.5px; }
+.o3-card-subrow > .ao-icon { margin-top: 2px; color: var(--teal-t); }
+.o3-card-subrow > span { min-width: 0; }
 .o3-card-foot { display: flex; justify-content: space-between; align-items: baseline; padding-top: 6px; border-top: 1px solid var(--line); }
 
 /* ---------- HUD, zoom, minimap, hint, empty office ---------- */
@@ -109,7 +113,10 @@
 .o3.is-stale .o3-hud { border-style: dashed; border-color: var(--line-2); }
 .o3.is-error .o3-hud-dot { background: var(--red); box-shadow: 0 0 0 3px var(--red-s); }
 .o3.is-error .o3-hud-mode { color: var(--red-t); }
-.o3.is-stale .o3-world, .o3.is-error .o3-world { opacity: .55; }
+/* The scene dims; tags and labels lose their colour instead of fading, so their text keeps 4.5:1 (like .ao-stale).
+   Inside a button or link only its contents go gray: a filter would gray its focus ring too. */
+.o3.is-stale .o3-world > svg, .o3.is-error .o3-world > svg { opacity: .55; }
+.o3:is(.is-stale, .is-error) :is(span.o3-lbl, .o3-lbl > *, .o3-tag, .o3-itag) { filter: grayscale(1); }
 .o3.is-stale .o3-world *, .o3.is-error .o3-world * { animation-play-state: paused !important; }
 .o3-hud-meta { color: var(--text-2); }
 .o3-zoom { right: 14px; bottom: 40px; display: flex; flex-direction: column; gap: 2px; padding: 4px; border-radius: 12px; }
@@ -158,8 +165,10 @@
 /* Hidden tab: stop every ambient animation. */
 .o3.o3-paused, .o3.o3-paused * { animation-play-state: paused !important; }
 
-/* Reduced motion: tokens.css already stops animation; glows stay, steam goes. */
+/* Reduced motion (the system's, or Settings'): tokens.css already stops animation; glows stay, steam goes. */
 @media (prefers-reduced-motion: reduce) {
   .o3-steam { display: none; }
   .o3-halo { opacity: .8; }
 }
+.ao-reduce-motion .o3-steam { display: none; }
+.ao-reduce-motion .o3-halo { opacity: .8; }

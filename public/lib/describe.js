@@ -95,6 +95,15 @@ export function relPath(p, root) {
   return parts.length > 2 ? "…/" + parts.slice(-2).join("/") : P;
 }
 
+/** An absolute path that isn't the root or inside it: "Outside this project". Without a root to compare, every
+ *  absolute path (it can only be shown shortened, "…/parent/file"). */
+export function outsideRoot(p, root) {
+  if (!p || !/^(\/|[a-z]:\/)/i.test(norm(p))) return false;
+  if (!root) return true;
+  const r = relPath(p, root);
+  return r === norm(p) || r.startsWith("…/");
+}
+
 /** What a permission request is for: "run a command", "edit a file". */
 export function permissionPhrase(tool) {
   const t = String(tool || "").slice(0, 200);
@@ -199,15 +208,34 @@ const FAILURE = {
 /** "Went offline · no events for 30 min" */
 export const offlineText = (minutes = 30) => `Went offline · no events for ${minutes} min`;
 
+/** Your answer as the agent got it, for the conversation: "Approved once", "Denied: use the package without sudo". */
+export function answerText({ choice, text } = {}) {
+  if (choice === "approve") return "Approved once";
+  if (choice === "session") return "Allowed for this session";
+  if (choice === "auto") return "Approved automatically: allowed for this session";
+  return text ? `Denied: ${text}` : "Denied";
+}
+
+const ANSWERED = { approve: "You approved it once", session: "You allowed it for this session", auto: "Approved automatically, allowed for this session", deny: "You denied it" };
+
 /**
  * Any trace entry (tool, prompt, question, stop, subagent, notice, session) in plain English.
  * @returns {{text: string, target: string|null, icon: string}}
  */
 export function describeStep(x = {}, { root = null } = {}) {
   switch (x.kind) {
-    case "tool": return describeTool(x, { root, running: x.status === "running" });
+    case "tool": {
+      const d = describeTool(x, { root, running: x.status === "running" });
+      return x.status === "denied" ? { ...d, text: `Not allowed to ${permissionPhrase(x.tool)}` } : d;
+    }
     case "prompt": return { text: x.command ? "Ran a slash command" : "You sent a prompt", target: x.command || null, icon: "chat" };
     case "question": return { text: describeQuestion(x), target: x.target || null, icon: "hand" };
+    // An answer from the dashboard; its target is what was asked about (the command, or the file relative to the root).
+    case "answer": {
+      const no = x.choice === "deny" || x.choice === "reply", said = no && x.text;
+      const target = said || !x.tool ? null : describeTool({ tool: x.tool, target: x.target }, { root }).target;
+      return { text: said ? `You said no: “${x.text}”` : ANSWERED[x.choice] || "You answered", target, icon: no ? "x" : "check" };
+    }
     case "stop":
       return x.status === "error" ? { text: `Stopped: ${FAILURE[x.failure] || "the API returned an error"}`, target: null, icon: "alert" }
         : { text: "Finished turn", target: null, icon: "check" };
@@ -216,6 +244,8 @@ export function describeStep(x = {}, { root = null } = {}) {
       return { text: (x.phase === "stop" ? "Sub-agent finished" : "Started a sub-agent") + (what ? `: ${what}` : ""), target: null, icon: "sub-agent" };
     }
     case "notice": return { text: x.notificationType === "idle_prompt" ? "Waiting for your reply" : "Sent a notification", target: null, icon: "bell" };
+    // Your messages from the dashboard, handed over by its Stop hook: it carries on with them.
+    case "inbox": return { text: x.count > 1 ? `Got ${x.count} messages from you` : "Got your message", target: null, icon: "chat" };
     case "session": return { text: x.phase === "end" ? "Ended the session" : "Started a session", target: null, icon: "power" };
     case "offline": return { text: offlineText(x.minutes), target: null, icon: "power" };
     default: return { text: "Did something", target: null, icon: "pulse" };

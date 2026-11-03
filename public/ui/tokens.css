@@ -93,3 +93,9 @@
     scroll-behavior: auto !important;
   }
 }
+/* The same, chosen in Settings (ui/prefs.js). */
+.ao-reduce-motion *, .ao-reduce-motion *::before, .ao-reduce-motion *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}

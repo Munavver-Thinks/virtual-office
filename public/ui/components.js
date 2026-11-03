@@ -38,12 +38,13 @@ export function waitPill(waitMs) {
 }
 
 // ---------- glass panel and its four states ----------
-export function panel({ title, icon: ic, meta, tools = "", body = "", stale, busy = false, id, level = 2, label, cls } = {}) {
+/** badge = trusted HTML right after the title (a count pill); tools = trusted HTML at the end of the header. */
+export function panel({ title, icon: ic, meta, badge = "", tools = "", body = "", stale, busy = false, id, level = 2, label, cls } = {}) {
   const isStale = stale != null && stale !== false;
   const hid = id && title ? `${id}-title` : null, h = `h${Math.min(6, Math.max(1, level | 0))}`;
   const end = (meta ? `<span>${esc(meta)}</span>` : "") + (isStale ? staleNote(stale) : "") + tools;
   const head = title
-    ? `<header class="ao-panel-head">${ic ? icon(ic) : ""}<${h} class="ao-panel-title"${attrs({ id: hid })}>${esc(title)}</${h}>${end ? `<div class="ao-panel-end">${end}</div>` : ""}</header>`
+    ? `<header class="ao-panel-head">${ic ? icon(ic) : ""}<${h} class="ao-panel-title"${attrs({ id: hid })}>${esc(title)}</${h}>${badge}${end ? `<div class="ao-panel-end">${end}</div>` : ""}</header>`
     : isStale ? `<header class="ao-panel-head"><div class="ao-panel-end">${staleNote(stale)}</div></header>` : "";
   return `<section${attrs({ class: cx("ao-panel", cls), id, "aria-labelledby": hid, "aria-label": hid ? null : label || title, "aria-busy": busy ? "true" : null })}>${head}<div class="${cx("ao-panel-body", isStale && "ao-stale")}">${body}</div></section>`;
 }
@@ -107,12 +108,14 @@ export function stateChip(state, count, pressed = false) {
 }
 
 // ---------- segmented control ----------
-/** Radio group. Options are strings or { value, label, count }. bind() handles arrows and fires "ao-segment" { value }. */
+/** Radio group. Options are strings or { value, label, count, dot }; dot = a project colour index (0–5) shown before the
+ *  label. bind() handles arrows and fires "ao-segment" { value }. */
 export function segmented({ label, options = [], value, attrs: a = {} } = {}) {
   const { class: extra, ...rest } = a;
   const opts = options.map((o) => (typeof o === "object" ? o : { value: String(o), label: String(o) }));
   const tab = opts.some((o) => o.value === value) ? value : opts[0]?.value;
-  const opt = (o) => `<button${attrs({ type: "button", role: "radio", class: "ao-seg-opt", "aria-checked": String(o.value === value), tabindex: o.value === tab ? "0" : "-1", "data-value": o.value })}>${esc(o.label)}${o.count != null ? `<span class="ao-seg-count">${esc(o.count)}</span>` : ""}</button>`;
+  const dot = (o) => (o.dot != null ? `<span class="ao-seg-dot" style="--av:var(--proj-${colorIndex(o.dot, o.value) + 1})" aria-hidden="true"></span>` : "");
+  const opt = (o) => `<button${attrs({ type: "button", role: "radio", class: "ao-seg-opt", "aria-checked": String(o.value === value), tabindex: o.value === tab ? "0" : "-1", "data-value": o.value })}>${dot(o)}${esc(o.label)}${o.count != null ? `<span class="ao-seg-count">${esc(o.count)}</span>` : ""}</button>`;
   return `<div${attrs({ class: cx("ao-seg", extra), role: "radiogroup", "aria-label": label, ...rest })}>${opts.map(opt).join("")}</div>`;
 }
 
@@ -125,13 +128,18 @@ export function progressBar({ done = 0, doing = 0, total = 0, label } = {}) {
   return `<div class="ao-progress" role="img" aria-label="${esc(text)}"><span class="ao-progress-done" style="width:${w(d)}%"></span><span class="ao-progress-doing" style="width:${w(g)}%"></span></div>`;
 }
 
+/** The ring alone, filled to fraction (0–1; more shows full). Decorative: the text beside it says the same. */
+export function ringSvg(fraction = 0) {
+  const R = 15, C = 2 * Math.PI * R, arc = Math.min(Math.max(+fraction || 0, 0), 1) * C;
+  const bar = arc > 0 ? `<circle class="ao-ring-bar" cx="18" cy="18" r="${R}" stroke-dasharray="${arc.toFixed(2)} ${C.toFixed(2)}" transform="rotate(-90 18 18)"/>` : "";
+  return `<svg width="34" height="34" viewBox="0 0 36 36" aria-hidden="true" focusable="false"><circle class="ao-ring-track" cx="18" cy="18" r="${R}"/>${bar}</svg>`;
+}
+
 /** Teal ring; red only when spend is over 100% of the budget, and then the text says so too. */
 export function budgetRing({ spent = 0, budget = 0, period = "today" } = {}) {
   const s = Math.max(0, +spent || 0), b = Math.max(0, +budget || 0), pct = b ? s / b : 0, over = pct > 1;
-  const R = 15, C = 2 * Math.PI * R, arc = Math.min(pct, 1) * C;
   const sub = b ? `${over ? "Over budget · " : ""}${Math.round(pct * 100)}% of ${money(b, { trim: true })} ${period}` : "No budget set";
-  const bar = arc > 0 ? `<circle class="ao-ring-bar" cx="18" cy="18" r="${R}" stroke-dasharray="${arc.toFixed(2)} ${C.toFixed(2)}" transform="rotate(-90 18 18)"/>` : "";
-  return `<span class="${cx("ao-ring", over && "is-over")}"><svg width="34" height="34" viewBox="0 0 36 36" aria-hidden="true" focusable="false"><circle class="ao-ring-track" cx="18" cy="18" r="${R}"/>${bar}</svg><span class="ao-ring-text"><b class="ao-ring-amount">${esc(money(s))}</b><span class="ao-ring-sub">${esc(sub)}</span></span></span>`;
+  return `<span class="${cx("ao-ring", over && "is-over")}">${ringSvg(pct)}<span class="ao-ring-text"><b class="ao-ring-amount">${esc(money(s))}</b><span class="ao-ring-sub">${esc(sub)}</span></span></span>`;
 }
 
 // ---------- path chip and code box ----------
@@ -141,11 +149,12 @@ export function pathChip(path, { max = 36 } = {}) {
   return `<button${attrs({ type: "button", class: "ao-copy", "data-copy": full, title: "Copy full path", "aria-label": `Copy path ${short}` })}><span class="ao-copy-text">${esc(short)}</span>${icon("copy", { size: 13 })}<span class="ao-copy-done" aria-hidden="true">${icon("check", { size: 13 })}Copied</span></button>`;
 }
 
-/** Mono box, end-truncated on one line. Full text in the tooltip; long or multi-line text gets an expand button. */
-export function codeBox(text, { what = "command", expandAt = 48 } = {}) {
-  const full = String(text ?? ""), long = full.length > expandAt || full.includes("\n");
-  const more = long ? `<button${attrs({ type: "button", class: "ao-btn ao-btn--ghost ao-btn--icon ao-btn--sm ao-code-more", "data-expand": true, "aria-expanded": "false", "aria-label": `Full ${what}`, title: `Show full ${what}` })}>${icon("chevron")}</button>` : "";
-  return `<div class="ao-code"><code${attrs({ class: "ao-code-text", title: full || null })}>${esc(full)}</code>${more}</div>`;
+/** Mono box, end-truncated on one line. Full text in the tooltip; long or multi-line text gets an expand button.
+ *  open = start expanded (where the whole text matters, like a command you're asked to approve); title = a fuller tooltip. */
+export function codeBox(text, { what = "command", expandAt = 48, open = false, title } = {}) {
+  const full = String(text ?? ""), long = full.length > expandAt || full.includes("\n"), isOpen = !!open;
+  const more = long ? `<button${attrs({ type: "button", class: "ao-btn ao-btn--ghost ao-btn--icon ao-btn--sm ao-code-more", "data-expand": true, "aria-expanded": String(isOpen), "aria-label": `Full ${what}`, title: `Show full ${what}` })}>${icon("chevron")}</button>` : "";
+  return `<div class="${cx("ao-code", isOpen && "is-open")}"><code${attrs({ class: "ao-code-text", title: title || full || null })}>${esc(full)}</code>${more}</div>`;
 }
 
 // ---------- avatar ----------
@@ -215,6 +224,16 @@ export function positionHoverCard(card, anchor, boundsEl) {
   return p;
 }
 
+// ---------- toast ----------
+/** A small card for something that just happened. tone "needs" = an agent needs you (amber); "info" = a teal check.
+ *  actions = trusted HTML (buttons). Put toasts in a polite live region so they are announced. */
+export function toast({ tone = "info", icon: ic, title, text, actions = "", attrs: a = {} } = {}) {
+  const t = tone === "needs" ? "needs" : "info";
+  return `<div${attrs({ class: `ao-toast ao-toast--${t}`, ...a })}><span class="ao-toast-icon">${icon(ic || (t === "needs" ? "hand" : "check"), { size: 18 })}</span>` +
+    `<div class="ao-toast-body"><p class="ao-toast-title">${esc(title)}</p>${text ? `<p class="ao-toast-text" title="${esc(text)}">${esc(text)}</p>` : ""}` +
+    `${actions ? `<div class="ao-toast-actions">${actions}</div>` : ""}</div></div>`;
+}
+
 // ---------- theme controls ----------
 const toggleLabel = (theme) => `Switch to ${theme === "dark" ? "light" : "dark"} theme`;
 
@@ -259,9 +278,11 @@ async function copyText(text) {
 }
 
 const copyTimers = new WeakMap();
+/** Copies, says so, and fires "ao-copied" { ok } on the button (the work board shows a toast for it). */
 async function onCopy(btn) {
   const ok = await copyText(btn.dataset.copy);
   btn.focus({ preventScroll: true });
+  btn.dispatchEvent(new CustomEvent("ao-copied", { bubbles: true, detail: { ok } }));
   if (!ok) return announce("Couldn't copy. The browser blocked the clipboard.");
   btn.classList.add("is-copied");
   announce("Copied");

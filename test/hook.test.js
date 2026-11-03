@@ -5,7 +5,8 @@ const test = require("node:test");
 const assert = require("node:assert");
 const fs = require("fs"), os = require("os"), path = require("path"), net = require("net");
 const { spawn } = require("child_process");
-const { build, gitRootOf, walkUp, wantDetail, changed } = require("../hooks/hook");
+const hook = require("../hooks/hook");
+const { build, gitRootOf, walkUp, wantDetail, changed } = hook;
 const { cleanPrompt } = require("../hooks/text");
 
 const HOOK = path.join(__dirname, "..", "hooks", "hook.js");
@@ -230,23 +231,30 @@ test("prompt cleaning and labels stay linear on 1 MB adversarial prompts", () =>
   assert.equal(cleanPrompt("<system-reminder>x</system-reminder>".repeat(20000) + " real prompt").text, "real prompt");
 });
 
-test("hook process: 1 MB adversarial prompts finish in under 500 ms (beyond Node startup) and are spooled, in both modes", async () => {
-  const startup = await new Promise((resolve) => {
-    const t = Date.now();
-    spawn(process.execPath, ["-e", ""]).on("close", () => resolve(Date.now() - t));
-  });
+// Wall time while other test files run is noisy, so each case is timed against a tiny-prompt hook run just before it,
+// best of 3. A blow-up costs seconds; the in-process test above is the precise check.
+test("hook process: 1 MB adversarial prompts take under 500 ms more than a tiny one and are spooled, in both modes", async () => {
+  const prompt = (p, cwd) => JSON.stringify({ ...base, cwd, hook_event_name: "UserPromptSubmit", prompt: p });
   for (const detail of ["1", "0"]) {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ao-adv-"));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ao-adv-")), spare = fs.mkdtempSync(path.join(os.tmpdir(), "ao-adv-tiny-"));
     const env = { AGENT_OFFICE_DIR: dir, AGENT_OFFICE_URL: `http://127.0.0.1:${await freePort()}`, AGENT_OFFICE_DETAIL: detail };
-    const names = Object.keys(ADVERSARIAL);
-    for (const name of names) {
-      const r = await runHook(JSON.stringify({ ...base, cwd: dir, hook_event_name: "UserPromptSubmit", prompt: ADVERSARIAL[name] }), env);
-      assert.equal(r.code, 0, name); assert.equal(r.out, "", name);
-      assert.ok(r.ms - startup < 500, `${name} (detail ${detail}): ${r.ms}ms vs ${startup}ms startup`);
-    }
-    const spooled = fs.readFileSync(path.join(dir, "spool", "pending.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
-    assert.equal(spooled.length, names.length, `every event spooled (detail ${detail})`);
-    assert.ok(spooled.every((e) => e.ev === "UserPromptSubmit" && (detail === "1" ? e.prompt.length <= 600 : e.prompt === undefined)));
+    let runs = 0;
+    try {
+      for (const name of Object.keys(ADVERSARIAL)) {
+        const tries = [];
+        while (tries.length < 3 && !(Math.min(...tries) < 500)) {
+          const tiny = await runHook(prompt("fix the login test", dir), { ...env, AGENT_OFFICE_DIR: spare });
+          const r = await runHook(prompt(ADVERSARIAL[name], dir), env);
+          runs++;
+          assert.equal(r.code, 0, name); assert.equal(r.out, "", name);
+          tries.push(r.ms - tiny.ms);
+        }
+        assert.ok(Math.min(...tries) < 500, `${name} (detail ${detail}): ${tries.join(", ")}ms more than a tiny prompt`);
+      }
+      const spooled = fs.readFileSync(path.join(dir, "spool", "pending.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+      assert.equal(spooled.length, runs, `every event spooled (detail ${detail})`);
+      assert.ok(spooled.every((e) => e.ev === "UserPromptSubmit" && (detail === "1" ? e.prompt.length <= 600 : e.prompt === undefined)));
+    } finally { for (const d of [dir, spare]) fs.rmSync(d, { recursive: true, force: true }); }
   }
 });
 
@@ -263,7 +271,9 @@ test("hook process: 40 parallel hooks leave no temp files and lose no events", a
   const results = await Promise.all(runs);
   assert.ok(results.every((r) => r.code === 0 && r.out === ""));
   const spoolDir = path.join(dir, "spool");
-  assert.deepEqual(fs.readdirSync(spoolDir).filter((f) => f !== "pending.jsonl" && f !== "gitroots.json"), [], "no temp files left behind");
+  assert.deepEqual(fs.readdirSync(spoolDir).filter((f) => !["pending.jsonl", "gitroots.json", "fails.log"].includes(f)), [], "no temp files left behind");
+  assert.equal(hook.failsOf(spoolDir).length, 20, "every failed send noted; the report holds the newest 20");
+  assert.equal(fs.readFileSync(path.join(spoolDir, "fails.log"), "utf8").split("\n").filter((l) => /^\d{13}$/.test(l)).length, 40, "none lost");
   const events = fs.readFileSync(path.join(spoolDir, "pending.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
   assert.equal(events.length, 40);
   assert.ok(events.every((e) => e.gitRoot === repo), "every hook found the git root");
@@ -274,9 +284,277 @@ test("captureDetail in config: false, \"false\", 0, \"off\" and \"no\" all turn 
   for (const v of [true, "true", undefined, null, "", 1]) assert.equal(wantDetail({ captureDetail: v }, {}), true, JSON.stringify(v));
 });
 
+// ---- M5: waiting for an answer from the dashboard ----
+const { holdFor, canHold, decisionOf, hookOutput } = require("../hooks/hook");
+
+test("hold: the installer's --hold is the most the hook waits; AGENT_OFFICE_HOLD can only lower it; no --hold, no wait", () => {
+  const argv = (h) => ["node", "hook.js", "--agent-office", ...(h == null ? [] : [`--hold=${h}`])];
+  assert.equal(holdFor(argv(null), {}), 0, "installed before answering existed: Claude Code allows only 5 s");
+  assert.equal(holdFor(argv(120), {}), 120);
+  assert.equal(holdFor(argv(120), { AGENT_OFFICE_HOLD: "30" }), 30);
+  assert.equal(holdFor(argv(120), { AGENT_OFFICE_HOLD: "300" }), 120, "never past Claude Code's timeout");
+  assert.equal(holdFor(argv(120), { AGENT_OFFICE_HOLD: "0" }), 0, "0 = terminal only");
+  assert.equal(holdFor(argv(120), { AGENT_OFFICE_HOLD: "soon" }), 120);
+  assert.equal(holdFor(argv("9999"), {}), 600);
+  assert.equal(holdFor(argv("x"), {}), 0);
+});
+
+test("hold: only a PermissionRequest with detail on, for a tool the dashboard shows, with the whole command", () => {
+  const p = (tool_name, tool_input = {}) => ({ hook_event_name: "PermissionRequest", tool_name, tool_input });
+  assert.equal(canHold(p("Bash", { command: "sudo apt install cups-filters" }), true), true);
+  assert.equal(canHold(p("Edit", { file_path: "/p/.env", old_string: "a", new_string: "b" }), true), true);
+  assert.equal(canHold(p("Bash", { command: "x".repeat(500) }), true), true);
+  assert.equal(canHold(p("Bash", { command: "x".repeat(501) }), true), false, "you'd approve a part you can't see");
+  assert.equal(canHold(p("WebFetch", { url: "https://x.dev/" + "a".repeat(600) }), true), false);
+  assert.equal(canHold(p("Bash", { command: "ls" }), false), false, "detail off: the command isn't sent");
+  for (const tool of ["AskUserQuestion", "ExitPlanMode", "Agent", "Task", "mcp__github__create_issue", "Skill"]) assert.equal(canHold(p(tool), true), false, tool);
+  assert.equal(canHold({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "ls" } }, true), false);
+  assert.equal(canHold(null, true), false);
+});
+
+test("decision: only allow, or deny with a bounded message, ever reaches Claude Code", () => {
+  assert.equal(hookOutput(decisionOf({ behavior: "allow" })), '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}');
+  assert.equal(hookOutput(decisionOf({ behavior: "deny", message: "use the package without sudo" })),
+    '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"deny","message":"use the package without sudo"}}}');
+  assert.deepEqual(decisionOf({ behavior: "allow", updatedInput: { command: "rm -rf /" }, updatedPermissions: [{ type: "setMode" }] }), { behavior: "allow" }, "a server can't change the command");
+  assert.deepEqual(decisionOf({ behavior: "deny", interrupt: true }), { behavior: "deny", message: "The user denied this in Virtual Office." });
+  assert.equal(decisionOf({ behavior: "deny", message: "m".repeat(5000) }).message.length, 1000);
+  for (const bad of [null, "allow", { behavior: "ask" }, { behavior: "Allow" }, []]) assert.equal(decisionOf(bad), null, JSON.stringify(bad));
+});
+
+// The real hook process against a real server: the hook waits, the dashboard answers, the hook prints the decision.
+const { createServer } = require("../src/server");
+const quietLog = { log() {}, warn() {}, error() {} };
+function runHeld(stdin, env, hold) {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const child = spawn(process.execPath, [HOOK, "--agent-office", `--hold=${hold}`], { env: { ...process.env, AGENT_NAME: "", AGENT_OFFICE_HOLD: "", ...env }, stdio: ["pipe", "pipe", "pipe"] });
+    let out = "", err = "";
+    child.stdout.on("data", (d) => (out += d));
+    child.stderr.on("data", (d) => (err += d));
+    child.on("close", (code) => resolve({ code, out, err, ms: Date.now() - started }));
+    child.stdin.end(stdin);
+  });
+}
+/** A real server, with a dashboard open unless watched is false (asks are only opened while someone can answer). */
+async function office({ watched = true } = {}) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ao-held-"));
+  const app = createServer({ dir, log: quietLog });
+  await new Promise((r) => app.server.listen(0, "127.0.0.1", r));
+  const url = `http://127.0.0.1:${app.server.address().port}`, token = JSON.parse(fs.readFileSync(path.join(dir, "config.json"), "utf8")).token;
+  const env = { AGENT_OFFICE_DIR: dir, AGENT_OFFICE_URL: url, AGENT_OFFICE_TOKEN: token };
+  if (watched) await new Promise((resolve) => require("http").get(url + "/api/stream", (res) => { res.on("data", () => {}); res.on("error", () => {}); resolve(); }).on("error", () => {}));
+  /** Answers the session's question from the dashboard as soon as it's offered. */
+  const answerWhenAsked = (body) => new Promise((resolve) => {
+    const t = setInterval(async () => {
+      const a = app.store.agents().find((x) => x.question && x.question.ask);
+      if (!a) return;
+      clearInterval(t);
+      const r = await fetch(url + "/api/answer", { method: "POST", headers: { "X-Requested-With": "agent-office", "Content-Type": "application/json" }, body: JSON.stringify({ askId: a.question.ask.id, ...body }) });
+      resolve(r.status);
+    }, 20);
+  });
+  return { app, dir, env, answerWhenAsked };
+}
+const permission = (dir, command = "sudo apt install cups-filters") => JSON.stringify({ ...base, cwd: dir, hook_event_name: "PermissionRequest", tool_name: "Bash", tool_input: { command, description: "Install" } });
+
+test("hook process: answered from the dashboard, it prints the decision and exits 0 (approve, then deny with your text)", async () => {
+  const o = await office();
+  try {
+    let [r, status] = await Promise.all([runHeld(permission(o.dir), o.env, 30), o.answerWhenAsked({ kind: "approve" })]);
+    assert.equal(status, 200);
+    assert.deepEqual([r.code, r.err], [0, ""]);
+    assert.equal(r.out.trim(), '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}');
+    assert.ok(r.ms < 5000, `took ${r.ms} ms`);
+    [r] = await Promise.all([runHeld(permission(o.dir, "rm -rf build"), o.env, 30), o.answerWhenAsked({ kind: "reply", text: "Keep the build folder" })]);
+    assert.equal(r.code, 0);
+    assert.deepEqual(JSON.parse(r.out).hookSpecificOutput.decision, { behavior: "deny", message: "Keep the build folder" });
+    const d = o.app.store.detail("s1");
+    assert.deepEqual(d.conversation.filter((x) => x.kind === "answer").map((x) => [x.choice, !!x.delivered]), [["approve", true], ["reply", true]]);
+  } finally { await o.app.close(); }
+});
+
+test("hook process: nobody answers, so after its hold it exits 0 silently and the terminal prompt appears", async () => {
+  const o = await office();
+  try {
+    const r = await runHeld(permission(o.dir), o.env, 2);
+    assert.deepEqual([r.code, r.out, r.err], [0, "", ""]);
+    assert.ok(r.ms >= 1500 && r.ms < 6000, `waited ${r.ms} ms`);
+    const q = o.app.store.agents()[0].question;
+    assert.deepEqual([q.ask, q.windowClosed], [null, true], "the dashboard now says: answer in the terminal");
+  } finally { await o.app.close(); }
+});
+
+test("hook process: with nobody watching the dashboard it gets no ask and ends at once, so the terminal asks", async () => {
+  const o = await office({ watched: false });
+  try {
+    const r = await runHeld(permission(o.dir), o.env, 120);
+    assert.deepEqual([r.code, r.out], [0, ""]);
+    assert.ok(r.ms < 3000, `took ${r.ms} ms`);
+    assert.deepEqual(o.app.store.agents()[0].question.ask, null);
+  } finally { await o.app.close(); }
+});
+
+test("hook process: AGENT_OFFICE_HOLD=0, an old install without --hold, or detail off: it never waits", async () => {
+  const o = await office();
+  try {
+    for (const [env, hold] of [[{ AGENT_OFFICE_HOLD: "0" }, 120], [{}, null], [{ AGENT_OFFICE_DETAIL: "0" }, 120]]) {
+      const args = [HOOK, "--agent-office", ...(hold ? [`--hold=${hold}`] : [])], t = Date.now();
+      const r = await new Promise((resolve) => {
+        const child = spawn(process.execPath, args, { env: { ...process.env, AGENT_NAME: "", AGENT_OFFICE_HOLD: "", ...o.env, ...env }, stdio: ["pipe", "pipe", "pipe"] });
+        let out = ""; child.stdout.on("data", (d) => (out += d));
+        child.on("close", (code) => resolve({ code, out }));
+        child.stdin.end(permission(o.dir));
+      });
+      assert.deepEqual([r.code, r.out], [0, ""], JSON.stringify(env));
+      assert.ok(Date.now() - t < 3000, `${JSON.stringify(env)} took ${Date.now() - t} ms`);
+    }
+    assert.equal(o.app.store.agents()[0].question.ask, null, "no ask was opened");
+  } finally { await o.app.close(); }
+});
+
+test("hook process: server down, or a server that never answers, and it still exits 0 fast with nothing printed", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ao-held-"));
+  let r = await runHeld(permission(dir), { AGENT_OFFICE_DIR: dir, AGENT_OFFICE_URL: `http://127.0.0.1:${await freePort()}`, AGENT_OFFICE_TOKEN: "t" }, 120);
+  assert.deepEqual([r.code, r.out], [0, ""]); assert.ok(r.ms < 2000, `took ${r.ms} ms`);
+  const spooled = JSON.parse(fs.readFileSync(path.join(dir, "spool", "pending.jsonl"), "utf8"));
+  assert.deepEqual([spooled.ev, spooled.hold], ["PermissionRequest", undefined], "spooled for the record, without the wait");
+  // Accepts the connection and never replies: the 1.5 s send timeout ends it.
+  const sockets = [], hang = net.createServer((s) => sockets.push(s)).listen(0, "127.0.0.1");
+  await new Promise((res) => hang.once("listening", res));
+  try {
+    r = await runHeld(permission(dir), { AGENT_OFFICE_DIR: dir, AGENT_OFFICE_URL: `http://127.0.0.1:${hang.address().port}`, AGENT_OFFICE_TOKEN: "t" }, 120);
+    assert.deepEqual([r.code, r.out], [0, ""]); assert.ok(r.ms < 4000, `took ${r.ms} ms`);
+  } finally { for (const s of sockets) s.destroy(); hang.close(); }
+  // A server that hands out an askId and then says "pending" at once, forever: the hook doesn't spin, and stops at its hold.
+  let polls = 0;
+  const busy = require("http").createServer((req, res) => {
+    req.resume();
+    if (req.url.startsWith("/api/decision/")) polls++;
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(req.method === "POST" ? { accepted: 1, askId: "a".repeat(24) } : { status: "pending" }));
+  }).listen(0, "127.0.0.1");
+  await new Promise((res) => busy.once("listening", res));
+  try {
+    r = await runHeld(permission(dir), { AGENT_OFFICE_DIR: dir, AGENT_OFFICE_URL: `http://127.0.0.1:${busy.address().port}`, AGENT_OFFICE_TOKEN: "t" }, 3);
+    assert.deepEqual([r.code, r.out], [0, ""]);
+    assert.ok(r.ms < 8000, `took ${r.ms} ms`);
+    assert.ok(polls >= 1 && polls <= 4, `${polls} polls in 3 s`);
+  } finally { busy.close(); }
+});
+
 test("hook: StopFailure carries the error type and Claude Code's error text", () => {
   const e = ev("StopFailure", { error: "rate_limit", error_details: "429 Too Many Requests", last_assistant_message: "API Error: Rate limit reached" });
   assert.deepEqual([e.failure, e.message], ["rate_limit", "API Error: Rate limit reached"]);
   const lite = ev("StopFailure", { error: "overloaded", error_details: "529" }, { detail: false });
   assert.deepEqual([lite.failure, lite.message], ["overloaded", undefined]);
+});
+
+// ---- M6: messages from the dashboard, handed over by the Stop hook ----
+const { blockOf, wantInbox } = require("../hooks/hook");
+
+test("Stop: says it can take messages, except while Claude already carries on because of a Stop hook, and never for sub-agents", () => {
+  assert.equal(ev("Stop", { stop_hook_active: false }, { inbox: true }).inbox, true);
+  assert.equal(ev("Stop", { stop_hook_active: true }, { inbox: true }).inbox, undefined, "no loops");
+  assert.equal(ev("Stop", {}, { inbox: false }).inbox, undefined, "AGENT_OFFICE_INBOX=0");
+  assert.equal(ev("SubagentStop", {}, { inbox: true }).inbox, undefined);
+  assert.equal(ev("PreToolUse", { tool_name: "Bash", tool_input: { command: "ls" } }, { inbox: true }).inbox, undefined);
+  assert.deepEqual([wantInbox({}), wantInbox({ AGENT_OFFICE_INBOX: "0" }), wantInbox({ AGENT_OFFICE_INBOX: "off" }), wantInbox({ AGENT_OFFICE_INBOX: "1" })], [true, false, false, true]);
+});
+
+test("Stop: the reply that makes Claude carry on is built here from plain strings only, and bounded", () => {
+  assert.equal(blockOf({ messages: ["Also update the changelog."] }), '{"decision":"block","reason":"New message from your lead: Also update the changelog."}');
+  assert.deepEqual(JSON.parse(blockOf({ messages: ["one", " two "] })), { decision: "block", reason: "New messages from your lead:\n- one\n- two" });
+  for (const bad of [null, {}, { messages: [] }, { messages: "hi" }, { messages: [5, null, {}, "   "] }, { decision: "block", reason: "rm -rf /" }]) assert.equal(blockOf(bad), null, JSON.stringify(bad));
+  const big = JSON.parse(blockOf({ messages: Array.from({ length: 30 }, () => "m".repeat(5000)), decision: "approve", hookSpecificOutput: {} }));
+  assert.deepEqual(Object.keys(big), ["decision", "reason"], "nothing else the server sends gets through");
+  assert.equal(big.reason.split("\n- ").length - 1, 10, "at most 10 messages");
+  assert.ok(big.reason.length < 10 * 1000 + 100, "each at most 1,000 characters");
+});
+
+test("hold (M5 c): searches only wait when the pattern, file filter or query is sent whole, and LS goes to the terminal", () => {
+  const p = (tool_name, tool_input = {}) => ({ hook_event_name: "PermissionRequest", tool_name, tool_input });
+  assert.equal(canHold(p("Grep", { pattern: "roundCents", path: "/p/app/src" }), true), true);
+  assert.equal(canHold(p("Grep", { pattern: "x".repeat(201) }), true), false, "cut at 200");
+  assert.equal(canHold(p("Grep", { pattern: "a\nb" }), true), false, "folded onto one line");
+  assert.equal(canHold(p("Glob", { pattern: "*.ts", glob: "  src/**  " }), true), false);
+  assert.equal(canHold(p("WebSearch", { query: "express rate limit" }), true), true);
+  assert.equal(canHold(p("WebSearch", { query: "q".repeat(300) }), true), false);
+  assert.equal(canHold(p("LS", { path: "/p/app" }), true), false);
+  assert.equal(canHold(p("Bash", { command: "printf 'a\\nb'\nls" }), true), true, "a command keeps its line breaks, so it's whole");
+  assert.deepEqual(ev("PreToolUse", { tool_name: "LS", tool_input: { path: "/p/app/src" } }).detail, { path: "/p/app/src" }, "LS now shows which folder");
+});
+
+/** A real server with a session and a queued message, and the env for a hook that talks to it. */
+async function inboxOffice() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ao-inbox-"));
+  const app = createServer({ dir, log: quietLog });
+  await new Promise((r) => app.server.listen(0, "127.0.0.1", r));
+  const url = `http://127.0.0.1:${app.server.address().port}`, token = JSON.parse(fs.readFileSync(path.join(dir, "config.json"), "utf8")).token;
+  app.store.apply({ type: "hook", t: new Date().toISOString(), session: "s1", ev: "UserPromptSubmit", cwd: dir, prompt: "Fix the till" });
+  app.store.queueMessage("s1", "Keep the old helper exported.");
+  return { app, dir, env: { AGENT_OFFICE_DIR: dir, AGENT_OFFICE_URL: url, AGENT_OFFICE_TOKEN: token, AGENT_OFFICE_INBOX: "" } };
+}
+const stopPayload = (dir, active = false) => JSON.stringify({ ...base, cwd: dir, hook_event_name: "Stop", stop_hook_active: active, last_assistant_message: "Done." });
+
+test("hook process: a Stop prints your message as a block and exits 0; the next Stop (stop_hook_active) prints nothing", async () => {
+  const o = await inboxOffice();
+  try {
+    let r = await runHook(stopPayload(o.dir), o.env);
+    assert.equal(r.code, 0);
+    assert.deepEqual(JSON.parse(r.out), { decision: "block", reason: "New message from your lead: Keep the old helper exported." });
+    assert.ok(r.ms < 3000, `took ${r.ms} ms`);
+    o.app.store.queueMessage("s1", "And the changelog.");
+    r = await runHook(stopPayload(o.dir, true), o.env);
+    assert.deepEqual([r.code, r.out], [0, ""], "Claude is carrying on because of a Stop hook: no second block, no loop");
+    assert.equal(o.app.store.agents()[0].queued, 1, "still queued, for its next real stop");
+    r = await runHook(stopPayload(o.dir), { ...o.env, AGENT_OFFICE_INBOX: "0" });
+    assert.deepEqual([r.code, r.out, o.app.store.agents()[0].queued], [0, "", 1], "AGENT_OFFICE_INBOX=0: never");
+  } finally { await o.app.close(); }
+});
+
+test("hook process: a Stop with the server down exits 0 fast, prints nothing, and spools a copy that never takes messages", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ao-inbox-"));
+  const r = await runHook(stopPayload(dir), { AGENT_OFFICE_DIR: dir, AGENT_OFFICE_URL: `http://127.0.0.1:${await freePort()}`, AGENT_OFFICE_TOKEN: "t", AGENT_OFFICE_INBOX: "" });
+  assert.deepEqual([r.code, r.out], [0, ""]);
+  assert.ok(r.ms < 2000, `took ${r.ms} ms`);
+  const spooled = JSON.parse(fs.readFileSync(path.join(dir, "spool", "pending.jsonl"), "utf8"));
+  assert.deepEqual([spooled.ev, spooled.inbox], ["Stop", true], "it keeps saying the hook takes messages; the server only hands them over to a live Stop");
+  // A server that answers a Stop with junk: nothing printed.
+  const junk = require("http").createServer((req, res) => { req.resume(); res.writeHead(200, { "Content-Type": "application/json" }); res.end('{"messages":[{"x":1}],"decision":"block"}'); }).listen(0, "127.0.0.1");
+  await new Promise((res) => junk.once("listening", res));
+  try {
+    const j = await runHook(stopPayload(dir), { AGENT_OFFICE_DIR: dir, AGENT_OFFICE_URL: `http://127.0.0.1:${junk.address().port}`, AGENT_OFFICE_TOKEN: "t", AGENT_OFFICE_INBOX: "" });
+    assert.deepEqual([j.code, j.out], [0, ""]);
+  } finally { junk.close(); }
+});
+
+/** A server that answers every call with `status` and then sends a byte every 200 ms, never ending. */
+async function trickler(status) {
+  const timers = [];
+  const srv = require("http").createServer((req, res) => {
+    req.resume();
+    res.writeHead(status, { "Content-Type": "application/json" });
+    res.write("{");
+    timers.push(setInterval(() => res.write(" "), 200));
+  }).listen(0, "127.0.0.1");
+  await new Promise((r) => srv.once("listening", r));
+  return { url: `http://127.0.0.1:${srv.address().port}`, close: () => { timers.forEach(clearInterval); srv.closeAllConnections?.(); srv.close(); } };
+}
+
+test("hook process: a server that trickles bytes can't hold a call past its deadline; a reply cut off after 2xx isn't spooled twice", async () => {
+  for (const [status, spooled] of [[200, false], [503, true]]) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ao-trickle-")), srv = await trickler(status);
+    try {
+      const env = { AGENT_OFFICE_DIR: dir, AGENT_OFFICE_URL: srv.url, AGENT_OFFICE_TOKEN: "t", AGENT_OFFICE_INBOX: "" };
+      for (const payload of [stopPayload(dir), JSON.stringify({ ...base, cwd: dir, hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "ls" }, tool_use_id: "t1" })]) {
+        const r = await runHook(payload, env);
+        assert.deepEqual([r.code, r.out], [0, ""], `${status}`);
+        assert.ok(r.ms < 3000, `${status}: took ${r.ms} ms, the 1.5 s deadline ends it (the hard stop is 4 s)`);
+      }
+      const file = path.join(dir, "spool", "pending.jsonl");
+      assert.equal(fs.existsSync(file), spooled, spooled ? "the server never took it: spooled" : "a 2xx status line means the server took it: no second copy");
+      if (spooled) assert.equal(fs.readFileSync(file, "utf8").trim().split("\n").length, 2);
+    } finally { srv.close(); }
+  }
 });

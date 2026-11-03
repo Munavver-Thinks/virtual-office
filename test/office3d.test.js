@@ -4,6 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert");
 const path = require("path");
 const { pathToFileURL } = require("url");
+const { withDom } = require("./helpers/dom");
 
 const load = () => import(pathToFileURL(path.join(__dirname, "..", "public", "office3d.js")).href);
 const M = 60000, NOW = Date.parse("2026-10-17T15:42:00Z");
@@ -303,173 +304,7 @@ test("view maths: zoom 0.45–2.6 around the cursor, pan clamping, fit and the m
   assert.equal(o.tagScale(2), 1.1 / 2);
 });
 
-// ---------- the controller (createOffice) on a tiny fake DOM ----------
-/**
- * Just enough DOM for createOffice() and bind(): parses the markup it generates, simple selectors (tag, #id, .class,
- * [attr], [attr="v"], :not(), comma lists), events with capture and bubbling, and counts every write.
- */
-function fakeDom({ width = 1200, height = 800 } = {}) {
-  const SVG = "http://www.w3.org/2000/svg", dom = { writes: 0 };
-  let doc = null;
-  const ENT = { amp: "&", lt: "<", gt: ">", quot: "\u0022", "#39": "\u0027" };
-  const decode = (t) => t.replace(/&(amp|lt|gt|quot|#39);/g, (_, e) => ENT[e]);
-  const kebab = (k) => k.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase());
-  class Node {
-    constructor() { this.parentNode = null; }
-    get nextSibling() { const s = this.parentNode?.childNodes; return s ? s[s.indexOf(this) + 1] || null : null; }
-    get previousSibling() { const s = this.parentNode?.childNodes; return s ? s[s.indexOf(this) - 1] || null : null; }
-    remove() { if (!this.parentNode) return; const s = this.parentNode.childNodes; s.splice(s.indexOf(this), 1); this.parentNode = null; dom.writes++; }
-  }
-  class Text extends Node { constructor(t) { super(); this.data = t; } get textContent() { return this.data; } }
-  const style = () => {
-    const p = {};
-    return new Proxy({}, {
-      get(_, k) {
-        if (k === "setProperty") return (n, v) => { p[n] = String(v); dom.writes++; };
-        if (k === "cssText") return Object.entries(p).map(([a, b]) => `${a}:${b}`).join(";");
-        return p[kebab(String(k))] ?? "";
-      },
-      set(_, k, v) {
-        dom.writes++;
-        if (k === "cssText") {
-          for (const x of Object.keys(p)) delete p[x];
-          for (const part of String(v).split(";")) { const i = part.indexOf(":"); if (i > 0) p[part.slice(0, i).trim()] = part.slice(i + 1).trim(); }
-        } else if (v === "" || v == null) delete p[kebab(String(k))];
-        else p[kebab(String(k))] = String(v);
-        return true;
-      },
-    });
-  };
-  class El extends Node {
-    constructor(tag, ns) {
-      super();
-      Object.assign(this, { localName: tag.toLowerCase(), ns, attrs: new Map(), childNodes: [], listeners: {}, style: style(), ownerDocument: doc });
-    }
-    get tagName() { return this.localName.toUpperCase(); }
-    get children() { return this.childNodes.filter((n) => n instanceof El); }
-    get firstChild() { return this.childNodes[0] || null; }
-    get lastChild() { return this.childNodes.at(-1) || null; }
-    get firstElementChild() { return this.children[0] || null; }
-    get lastElementChild() { return this.children.at(-1) || null; }
-    getAttribute(k) { return this.attrs.has(k) ? this.attrs.get(k) : null; }
-    hasAttribute(k) { return this.attrs.has(k); }
-    setAttribute(k, v) { this.attrs.set(k, String(v)); dom.writes++; }
-    removeAttribute(k) { if (this.attrs.delete(k)) dom.writes++; }
-    get id() { return this.getAttribute("id") || ""; }
-    get className() { return this.getAttribute("class") || ""; }
-    set className(v) { this.setAttribute("class", v); }
-    get classList() {
-      const el = this, list = () => el.className.split(/\s+/).filter(Boolean);
-      const set = (l) => el.setAttribute("class", l.join(" "));
-      return {
-        contains: (c) => list().includes(c),
-        add: (...cs) => { const l = list(), add = cs.filter((c) => !l.includes(c)); if (add.length) set([...l, ...add]); },
-        remove: (...cs) => { const l = list(); if (cs.some((c) => l.includes(c))) set(l.filter((x) => !cs.includes(x))); },
-        toggle(c, force) { const on = force === undefined ? !list().includes(c) : !!force; if (on) this.add(c); else this.remove(c); return on; },
-      };
-    }
-    get dataset() {
-      const el = this;
-      return new Proxy({}, { get: (_, k) => el.getAttribute("data-" + kebab(String(k))) ?? undefined, set: (_, k, v) => (el.setAttribute("data-" + kebab(String(k)), v), true) });
-    }
-    get hidden() { return this.hasAttribute("hidden"); }
-    set hidden(v) { if (v) this.setAttribute("hidden", ""); else this.removeAttribute("hidden"); }
-    append(...ns) { for (const n of ns) this.insertBefore(n, null); }
-    appendChild(n) { return this.insertBefore(n, null); }
-    insertBefore(n, ref) {
-      if (n.parentNode) n.remove();
-      const i = ref ? this.childNodes.indexOf(ref) : -1;
-      if (i < 0) this.childNodes.push(n); else this.childNodes.splice(i, 0, n);
-      n.parentNode = this;
-      dom.writes++;
-      return n;
-    }
-    contains(n) { for (let e = n; e; e = e.parentNode) if (e === this) return true; return false; }
-    get textContent() { return this.childNodes.map((n) => n.textContent).join(""); }
-    set textContent(v) { for (const c of [...this.childNodes]) c.remove(); if (v) this.append(new Text(String(v))); dom.writes++; }
-    set innerHTML(html) { for (const c of [...this.childNodes]) c.remove(); parse(String(html), this); dom.writes++; }
-    get innerHTML() { return this.childNodes.map((n) => (n instanceof Text ? n.data : `<${n.localName}>${n.innerHTML}</${n.localName}>`)).join(""); }
-    insertAdjacentHTML(_, html) { parse(String(html), this); }
-    matches(sel) { return sel.split(",").some((s) => match(this, s.trim())); }
-    closest(sel) { for (let e = this; e instanceof El; e = e.parentNode) if (e !== doc && e.matches(sel)) return e; return null; }
-    querySelectorAll(sel) { const out = [], walk = (e) => { for (const c of e.children) { if (c.matches(sel)) out.push(c); walk(c); } }; walk(this); return out; }
-    querySelector(sel) { return this.querySelectorAll(sel)[0] || null; }
-    addEventListener(t, fn, o) { (this.listeners[t] ||= []).push({ fn, cap: o === true || !!o?.capture }); }
-    removeEventListener(t, fn, o) { const cap = o === true || !!o?.capture; this.listeners[t] = (this.listeners[t] || []).filter((l) => l.fn !== fn || l.cap !== cap); }
-    dispatchEvent(e) {
-      const path = [];
-      for (let n = this; n; n = n.parentNode) path.push(n);
-      let stop = false;
-      Object.assign(e, { target: this, stopPropagation: () => (stop = true), preventDefault: () => (e.defaultPrevented = true) });
-      for (const n of [...path].reverse()) for (const l of n.listeners[e.type] || []) if (l.cap && !stop) l.fn(e);
-      for (const n of path) { for (const l of n.listeners[e.type] || []) if (!l.cap && !stop) l.fn(e); if (stop) break; }
-    }
-    click() { this.dispatchEvent({ type: "click", button: 0 }); }
-    focus() { doc.activeElement = this; this.dispatchEvent({ type: "focusin" }); }
-    get clientWidth() { return this.classList.contains("o3") || this === doc.documentElement ? width : 0; }
-    get clientHeight() { return this.classList.contains("o3") || this === doc.documentElement ? height : 0; }
-    get offsetWidth() { return 280; }
-    get offsetHeight() { return 160; }
-    get offsetParent() { return null; }
-    getBoundingClientRect() {
-      return this.classList.contains("o3") ? { left: 0, top: 0, right: width, bottom: height, width, height } : { left: 500, top: 400, right: 540, bottom: 460, width: 40, height: 60 };
-    }
-  }
-  function match(el, s) {
-    const re = /([a-zA-Z][\w-]*)|#([\w-]+)|\.([\w-]+)|\[([\w-]+)(?:="([^"]*)")?\]|:not\(([^)]*)\)/g;
-    let m, pos = 0;
-    while ((m = re.exec(s))) {
-      if (m.index !== pos) throw new Error(`fake DOM: unsupported selector ${s}`);
-      pos = re.lastIndex;
-      if (m[1] && el.localName !== m[1].toLowerCase()) return false;
-      if (m[2] && el.id !== m[2]) return false;
-      if (m[3] && !el.classList.contains(m[3])) return false;
-      if (m[4] && (!el.hasAttribute(m[4]) || (m[5] !== undefined && el.getAttribute(m[4]) !== m[5]))) return false;
-      if (m[6] && match(el, m[6])) return false;
-    }
-    if (pos !== s.length) throw new Error(`fake DOM: unsupported selector ${s}`);
-    return true;
-  }
-  function parse(html, parent) {
-    const re = /<!--[\s\S]*?-->|<\/([a-zA-Z][\w:-]*)\s*>|<([a-zA-Z][\w:-]*)((?:\s+[^\s=/>]+(?:\s*=\s*"[^"]*")?)*)\s*(\/?)>|([^<]+)/g;
-    let cur = parent, m;
-    while ((m = re.exec(html))) {
-      if (m[1]) { let e = cur; while (e !== parent && e.localName !== m[1].toLowerCase()) e = e.parentNode; if (e !== parent) cur = e.parentNode; }
-      else if (m[2]) {
-        const el = new El(m[2], m[2] === "svg" || cur.ns === SVG ? SVG : null);
-        for (const a of m[3].matchAll(/([^\s=/>]+)(?:\s*=\s*"([^"]*)")?/g)) el.attrs.set(a[1], a[2] === undefined ? "" : decode(a[2]));
-        cur.append(el);
-        if (!m[4]) cur = el;
-      } else if (m[5]) cur.append(new Text(decode(m[5])));
-    }
-  }
-  doc = new El("#document", null);
-  Object.assign(doc, {
-    hidden: false, activeElement: null,
-    createElement: (t) => new El(t, null), createElementNS: (ns, t) => new El(t, ns),
-    getElementById: (id) => doc.querySelector(`#${id}`),
-  });
-  doc.ownerDocument = null;
-  const html = new El("html", null), body = new El("body", null);
-  doc.append(html);
-  html.append(body);
-  doc.documentElement = html;
-  doc.body = body;
-  dom.document = doc;
-  dom.fire = (el, type, props = {}) => el.dispatchEvent({ type, ...props });
-  return dom;
-}
-
-/** Installs a fake DOM as the globals createOffice() uses; restore() puts the old ones back. */
-function withDom(opts) {
-  const dom = fakeDom(opts), keys = ["document", "requestAnimationFrame", "cancelAnimationFrame"], saved = keys.map((k) => globalThis[k]);
-  globalThis.document = dom.document;
-  globalThis.requestAnimationFrame = () => 1; // frames never run here: walks start but stay put
-  globalThis.cancelAnimationFrame = () => {};
-  dom.restore = () => keys.forEach((k, i) => { if (saved[i] === undefined) delete globalThis[k]; else globalThis[k] = saved[i]; });
-  return dom;
-}
-
+// ---------- the controller (createOffice) on a tiny fake DOM (test/helpers/dom.js) ----------
 /** Demo-like office: basket bill works with two interns (one running), two wait on you, one idles, one works with no tool yet, one is offline. */
 function demoAgents() {
   const a = (session, project, label, state, extra = {}) => ({ session, project, label, name: `${project} · ${label}`, state, started: iso(300 - session.length), host: "thinkpad-x1",
@@ -585,6 +420,62 @@ test("office DOM: stale, error with Retry, replay time, filter dimming, and crow
     assert.equal(walking(), 2, "newcomers walk in from the entrance");
     office.update([...agents, ...more(2, "pair"), ...more(7, "crowd")], { now: NOW });
     assert.equal(walking(), 0, "more than six movers at once snap");
+    office.destroy();
+  } finally { dom.restore(); }
+});
+
+// ---------- M4: replay cards, the page's own empty state, no guessed counts ----------
+test("hover card during replay: only the state at that moment, never today's live numbers", async () => {
+  const { cardHTML } = await load();
+  const refund = { session: "r", project: "checkout-api", label: "refund flow", name: "checkout-api · refund flow", host: "thinkpad-x1", state: "waiting",
+    waitingSince: iso(9), cost: 2.05, requests: 4, hasPlan: true, plan: { done: 3, inProgress: 1, pending: 5 } };
+  const html = cardHTML(refund, { now: NOW, replay: true });
+  for (const s of ["refund flow", "checkout-api · thinkpad-x1", "Needs you · 9m", "Actions, plan and cost show live data only."]) assert.ok(html.includes(s), s);
+  assert.ok(!html.includes("$2.05") && !html.includes("3/9") && !html.includes("No plan"), "no live or guessed numbers for the past");
+});
+
+test("office DOM: a long room name gets a title on its label; cut name tags leave the full name to the hover card", async () => {
+  const dom = withDom();
+  try {
+    const { createOffice } = await load();
+    const box = dom.document.createElement("div");
+    dom.document.body.append(box);
+    const office = createOffice(box);
+    const root = box.firstElementChild, long = "payments-and-refunds-service-v2", name = `${long} · nightly settlement report`;
+    const agents = demoAgents();
+    agents[0] = { ...agents[0], project: long, name, gitRoot: `/code/${long}` };
+    office.update(agents, { now: NOW });
+    const room = (p) => root.querySelectorAll(".o3-room").find((b) => b.dataset.room === p);
+    assert.equal(room(long).getAttribute("title"), long, "the label is cut at 22 characters, so it has a title");
+    assert.equal(room("checkout-api").getAttribute("title"), null, "a short one doesn't need one");
+    // Tags ignore the pointer, so a title there could never show: none on name tags or intern tags.
+    const tags = [...root.querySelectorAll(".o3-tag").flatMap((t) => t.children), ...root.querySelectorAll(".o3-itag")];
+    assert.ok(tags.length > 8 && tags.every((t) => t.getAttribute("title") == null));
+    const btn = root.querySelectorAll(".o3-agent").find((b) => b.dataset.session === "basket");
+    const card = root.querySelector(`#${btn.dataset.hovercard}`);
+    assert.equal(card.querySelector(".o3-card-name").textContent, name, "the hover card has the whole name");
+    assert.ok(card.textContent.includes(`${long} · thinkpad-x1`) && card.textContent.includes("Explore loyalty rules"), "and the project, machine and sub-agents");
+    office.destroy();
+  } finally { dom.restore(); }
+});
+
+test("office DOM: showEmpty false leaves an empty office to the page; a failed first load shows no counts", async () => {
+  const dom = withDom();
+  try {
+    const { createOffice } = await load();
+    const box = dom.document.createElement("div");
+    dom.document.body.append(box);
+    const office = createOffice(box, { showEmpty: false });
+    const root = box.firstElementChild;
+    office.setStatus("error");
+    assert.equal(root.querySelector(".o3-hud-meta").textContent, "", "not 0 rooms · 0 agents");
+    assert.ok(root.querySelector(".ao-state--error"), "the error card still shows");
+    office.update([], { now: NOW });
+    assert.equal(root.querySelector(".o3-hud-meta").textContent, "0 rooms · 0 agents");
+    assert.equal(root.querySelector(".o3-empty").hidden, true, "no built-in empty card");
+    office.update(demoAgents(), { replayAt: NOW - 30 * M });
+    const card = root.querySelector(".o3-hovercard");
+    assert.ok(card.textContent.includes("State at"), "replay cards");
     office.destroy();
   } finally { dom.restore(); }
 });

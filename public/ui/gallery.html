@@ -150,7 +150,8 @@
     ${sec("State pills", row(ui.statePill("working"), ui.statePill("waiting", { waitMs: 9 * M }), ui.statePill("idle"), ui.statePill("offline"), ui.waitPill(4 * M)))}
     ${sec("Segmented control", `<div class="g-stack">
       ${row(ui.segmented({ label: "Range", value: "today", options: [{ value: "today", label: "Today" }, { value: "7d", label: "7d" }, { value: "30d", label: "30d" }] }))}
-      ${row(ui.segmented({ label: "Trace filter", value: "all", options: [{ value: "all", label: "All", count: 42 }, { value: "commands", label: "Commands", count: 12 }, { value: "edits", label: "Edits", count: 9 }, { value: "web", label: "Web", count: 0 }] }))}</div>`,
+      ${row(ui.segmented({ label: "Trace filter", value: "all", options: [{ value: "all", label: "All", count: 42 }, { value: "commands", label: "Commands", count: 12 }, { value: "edits", label: "Edits", count: 9 }, { value: "web", label: "Web", count: 0 }] }))}
+      ${row(ui.segmented({ label: "Room", value: "", options: [{ value: "", label: "All rooms", count: 8 }, { value: "checkout-api", label: "checkout-api", count: 3, dot: 1 }, { value: "docs-site", label: "docs-site", count: 1, dot: 2 }] }))}</div>`,
       "Tab into the group, then use the arrow keys, Home and End.")}
     ${sec("Progress", `<div class="g-stack">
       <div><span class="ao-big">26</span> <span class="ao-meta">of 50 planned tasks done</span></div>
@@ -166,6 +167,11 @@
       "End-truncated. Hover for the full text, or use the expand button.")}
     ${sec("Avatars", `<div class="g-stack">${row(...PROJECTS.map((n, i) => ui.avatar({ name: ["basket bill", "refund flow", "tokens page", "login fix", "rate limiter", "inventory sync"][i], color: i })))}
       ${row(ui.avatar({ name: "receipt printer", color: 0, size: "sm" }), ui.avatar({ name: "receipt printer", color: 0 }), ui.avatar({ name: "receipt printer", color: 0, size: "lg" }), ui.avatar({ name: "Munavver Khan", color: 5, round: true }))}</div>`)}
+    ${sec("Toast", `<div class="g-stack">
+      ${ui.toast({ tone: "needs", title: "receipt printer needs you", text: "Wants permission to run a command · sudo apt install cups-filters",
+        actions: ui.answerButton({ agent: "receipt printer" }) + ui.button({ label: "Dismiss" }) })}
+      ${ui.toast({ title: "Exported agent-office-2026-10-18.csv", text: "750 requests, one per row" })}</div>`,
+      "Amber only when an agent needs you. Put toasts in a polite live region.")}
     ${sec("Hover card", hoverDemo(p), "Hover or focus a button. Above by default, below near the top, always 8px inside the dashed box. Esc closes.")}
     ${sec("Panel states", `<div class="g-grid">
       ${ui.panel({ id: `${p}-live`, title: "Live activity", level: 4, meta: "Newest first", body: activity() })}

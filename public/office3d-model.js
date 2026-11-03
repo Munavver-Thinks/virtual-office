@@ -57,12 +57,18 @@ export function roomSize(n) {
   return { rows, cols, w: r2(cols * PITCH + PAD_L + PAD_R), d: r2(rows * ROW_D + PAD_BACK) };
 }
 
-/** Colour index (0–5, see PROJECT_COLORS) per project: its hashed colour, or the next free one. Older projects pick first. */
+/** Colour index (0–5, see PROJECT_COLORS) per project: the one you picked in Settings (an agent's projectColor), else its
+ *  hashed colour, or the next free one. Older projects pick first. */
 export function projectColors(agents = []) {
-  const order = [];
-  for (const a of [...agents].sort(byStart)) if (!order.includes(projectKey(a))) order.push(projectKey(a));
-  const taken = new Set(), out = new Map();
+  const order = [], out = new Map();
+  for (const a of [...agents].sort(byStart)) {
+    const p = projectKey(a);
+    if (Number.isInteger(a.projectColor) && a.projectColor >= 0 && a.projectColor < 6) out.set(p, a.projectColor);
+    if (!order.includes(p)) order.push(p);
+  }
+  const taken = new Set(out.values());
   for (const p of order) {
+    if (out.has(p)) continue;
     let i = projectColor(p);
     for (let k = 0; k < 6 && taken.has(i); k++) i = (i + 1) % 6;
     taken.add(i);
@@ -371,9 +377,12 @@ export const agentOpacity = (state, filter) => (filter && !filter.has(stateKey(s
 export const deskOpacity = (state, filter) => (filter && !filter.has(stateKey(state)) ? DIM : stateKey(state) === "offline" ? OFFLINE_DESK : 1);
 
 // ---------- hover card ----------
+/** What paths are shown relative to: the git root, else the folder the session started in. */
+export const rootOf = (a) => a.root || a.gitRoot || null;
+
 /** What the agent is doing now, in plain English: { text, target (relative path or command), icon }. */
 export function actionOf(a, { offlineMin = 30 } = {}) {
-  const k = stateKey(a.state), root = a.gitRoot || null, steps = a.recent || [];
+  const k = stateKey(a.state), root = rootOf(a), steps = a.recent || [];
   if (k === "needs" && a.question) {
     const q = a.question;
     const target = q.tool ? describeTool({ tool: q.tool, target: q.target, detail: q.detail }, { root }).target : q.target || null;
@@ -393,9 +402,12 @@ export function actionOf(a, { offlineMin = 30 } = {}) {
   return last ? describeStep(last, { root }) : { text: STATES[k].label, target: null, icon: STATES[k].icon };
 }
 
-/** Hover card body: name, project · machine, state pill, current action, plan progress, cost. */
-export function cardHTML(a, { now = Date.now(), color, offlineMin } = {}) {
-  const name = displayName(a), act = actionOf(a, { offlineMin }), p = a.plan || {};
+/** Hover card body: name, project · machine, state pill, current action, plan progress, cost.
+ *  replay: the office shows a past moment, of which only the state is known, so the card says so instead. */
+export function cardHTML(a, { now = Date.now(), color, offlineMin, replay = false } = {}) {
+  const name = displayName(a), head = `<div class="o3-card-head">${avatar({ name, project: projectKey(a), color, size: "sm", decorative: true })}<div class="o3-card-id"><div class="o3-card-name">${esc(name)}</div><div class="ao-meta">${esc(projectKey(a))}${a.host ? ` · ${esc(a.host)}` : ""}</div></div></div>`;
+  if (replay) return `<div class="o3-card">${head}<div>${statePill(a.state, { waitMs: waitMs(a, now) })}</div><div class="ao-meta">State at ${esc(clock(now))}. Actions, plan and cost show live data only.</div></div>`;
+  const act = actionOf(a, { offlineMin }), p = a.plan || {};
   const total = (p.done || 0) + (p.inProgress || 0) + (p.pending || 0);
   const sub = a.subagents || {}, subs = [sub.running && `${sub.running} running`, sub.finished && `${sub.finished} finished`].filter(Boolean);
   const subRows = (Array.isArray(sub.list) ? sub.list : []).map((x) =>
@@ -404,7 +416,7 @@ export function cardHTML(a, { now = Date.now(), color, offlineMin } = {}) {
     ? `${progressBar({ done: p.done, doing: p.inProgress, total, label: `Plan: ${p.done || 0} of ${total} done` })}<span class="o3-card-num">${p.done || 0}/${total}</span>`
     : `<span class="ao-meta">No plan</span>`;
   return `<div class="o3-card">
-    <div class="o3-card-head">${avatar({ name, project: projectKey(a), color, size: "sm", decorative: true })}<div class="o3-card-id"><div class="o3-card-name">${esc(name)}</div><div class="ao-meta">${esc(projectKey(a))}${a.host ? ` · ${esc(a.host)}` : ""}</div></div></div>
+    ${head}
     <div>${statePill(a.state, { waitMs: waitMs(a, now) })}</div>
     <div class="o3-card-act">${icon(act.icon, { size: 14 })}<span>${esc(act.text)}</span></div>
     ${act.target ? `<code class="o3-card-target" title="${esc(act.target)}">${esc(act.target)}</code>` : ""}
@@ -476,5 +488,5 @@ export function sceneBounds(L, pad = 40) {
   return { x, y, w: Math.ceil(Math.max(...xs) + pad - x), h: Math.ceil(Math.max(...ys) + pad + 24 - y) };
 }
 
-/** Changes only when agents join or leave, or move project: the trigger for a new layout. */
-export const layoutKey = (agents) => [...agents].sort(byStart).map((a) => `${a.session}\u0001${projectKey(a)}`).join("\u0002");
+/** Changes only when agents join or leave, or move project, or a project's colour is picked: the trigger for a new layout. */
+export const layoutKey = (agents) => [...agents].sort(byStart).map((a) => `${a.session}\u0001${projectKey(a)}\u0001${a.projectColor ?? ""}`).join("\u0002");

@@ -1,7 +1,8 @@
 // The 3D office: an SVG isometric floor with a glass room per git project. Every agent is a real <button>
 // (in urgency order) placed over its character; the SVG scene itself is decorative.
 //
-//   const office = createOffice(el, { onSelect(sessionId), onHover?(sessionId|null), onRetry?(), getTheme?, showNameTags?, offlineAfterMin? })
+//   const office = createOffice(el, { onSelect(sessionId), onHover?(sessionId|null), onRetry?(), getTheme?, showNameTags?, offlineAfterMin?, showEmpty? })
+//   showEmpty: false = the page draws its own card over an empty office (the Command Center's onboarding)
 //   office.update(snapshot.agents, { filter?, now?, replayAt?, offlineAfterMin? })
 //   office.setStatus("loading" | "live" | "stale" | "error", asOf?)   // loading until the first update
 //   office.setFilter(["working"] | null) · office.focusAgent(id) · office.focusRoom(project) · office.fit() · office.destroy()
@@ -12,6 +13,7 @@ import * as D from "./office3d-draw.js";
 import { bind, hoverCard, positionHoverCard, iconButton, emptyState, loadingState, errorState, PROJECT_COLORS, STATES, stateKey } from "./ui/components.js";
 import { esc, endTruncate } from "./ui/format.js";
 import { icon } from "./ui/icons.js";
+import { motionReduced } from "./ui/prefs.js";
 import { toolIcon } from "./lib/describe.js";
 
 export * from "./office3d-model.js";
@@ -24,7 +26,9 @@ const PAD = { top: 64, right: 72, bottom: 28, left: 28 };
 const MAP = { w: 200, h: 104 };
 const MAX_WALKERS = 6; // more people changing place at once (a reconnect, a replay jump) snap instead of walking
 const STATUSES = new Set(["loading", "live", "stale", "error"]);
-const NAME_MAX = 22; // tags and room labels cut longer names with an ellipsis (CSS); the full name goes in a title
+// Tags and room labels cut longer names with an ellipsis (CSS). A room label then gets a title; a name tag ignores the
+// pointer, so its full name is in the hover card (and the button's aria-label).
+const NAME_MAX = 22;
 let instances = 0;
 
 const pageTheme = () => (document.documentElement.classList.contains("ao-light") ? "light" : "dark");
@@ -56,7 +60,7 @@ function shell(id) {
 }
 
 export function createOffice(container, opts = {}) {
-  const { onSelect = () => {}, onHover = null, onRetry = null, getTheme = pageTheme, showNameTags = true } = opts;
+  const { onSelect = () => {}, onHover = null, onRetry = null, getTheme = pageTheme, showNameTags = true, showEmpty = true } = opts;
   const id = `o3-${++instances}`;
   container.innerHTML = shell(id);
   const root = container.firstElementChild, q = (s) => root.querySelector(s);
@@ -71,8 +75,9 @@ export function createOffice(container, opts = {}) {
   let view = { x: 0, y: 0, z: 1 }, vp = { w: 0, h: 0 }, fitted = true, mapT = null, tween = null, raf = 0, last = 0, moveT = 0;
   let statics = [], keys = [], hallG = null, spotKey = "", hallKey = "", status = "loading", asOf = null, overlayKey = "", lastCounts = null;
   const chars = new Map(), desks = new Map(), walkers = new Set();
+  // Reduced motion: the system's setting, or Settings' Reduce motion (ui/prefs.js).
   const mq = typeof matchMedia === "function" ? matchMedia("(prefers-reduced-motion: reduce)") : null;
-  let reduced = !!mq?.matches;
+  let reduced = motionReduced();
 
   // Glass rims are a touch darker on the light floor.
   const color = (i) => (theme === "light" ? M.shade(PROJECT_COLORS[i], 0.86) : PROJECT_COLORS[i]);
@@ -146,7 +151,7 @@ export function createOffice(container, opts = {}) {
   function buildLabels() {
     if (L.empty) { labelsEl.innerHTML = ""; return; }
     const spots = M.labelSpots(L), spot = (k) => { const p = spots.get(k); return at(p.x, p.y, p.z); };
-    const room = (r) => `<button type="button" class="o3-lbl o3-room" data-room="${esc(r.project)}" style="${spot(r.project)}" aria-label="${esc(`${r.project}, ${r.agents} ${r.agents === 1 ? "agent" : "agents"}. Zoom to this room`)}">` +
+    const room = (r) => `<button type="button" class="o3-lbl o3-room" data-room="${esc(r.project)}" style="${spot(r.project)}" aria-label="${esc(`${r.project}, ${r.agents} ${r.agents === 1 ? "agent" : "agents"}. Zoom to this room`)}"${r.project.length > NAME_MAX ? ` title="${esc(r.project)}"` : ""}>` +
       `<span class="o3-dot" style="background:${PROJECT_COLORS[r.color]}"></span><b>${esc(r.project)}</b><span class="o3-lbl-n">${r.agents} ${r.agents === 1 ? "agent" : "agents"}</span></button>`;
     const lg = L.lounge, sp = L.spot, h = L.hall;
     labelsEl.innerHTML = L.rooms.map(room).join("") +
@@ -224,12 +229,13 @@ export function createOffice(container, opts = {}) {
     if (u.tags) setOpacity(u.tags, M.deskOpacity(a.state, filter));
   }
 
-  /** Small tags over the interns: what each sub-agent does, with a check once it finished. Stacked so they don't overlap. */
+  /** Small tags over the interns: what each sub-agent does, with a check once it finished. Stacked so they don't overlap.
+   *  Tags ignore the pointer; the parent's hover card has each sub-agent's text in full. */
   function renderInternTags(u, interns) {
     if (!u.tags) { u.tags = document.createElement("div"); itagsEl.append(u.tags); }
     u.tags.innerHTML = interns.map((t, i) => {
-      const [x, y] = W(t.head), long = t.text.length > 28;
-      return `<span class="o3-itag ao-pill ${t.running ? "ao-pill--working" : "o3-itag--done"}"${long ? ` title="${esc(t.text)}"` : ""} style="transform:translate(${x.toFixed(1)}px,${y.toFixed(1)}px) scale(var(--tag-s)) translate(-50%,calc(-100% - ${i * 19}px))">` +
+      const [x, y] = W(t.head);
+      return `<span class="o3-itag ao-pill ${t.running ? "ao-pill--working" : "o3-itag--done"}" style="transform:translate(${x.toFixed(1)}px,${y.toFixed(1)}px) scale(var(--tag-s)) translate(-50%,calc(-100% - ${i * 19}px))">` +
         `${icon(t.running ? "sub-agent" : "check", { size: 11 })}<span>${esc(endTruncate(t.text, 28))}</span></span>`;
     }).join("");
   }
@@ -257,10 +263,10 @@ export function createOffice(container, opts = {}) {
       c.btnSig = sig;
       c.btn.setAttribute("aria-label", label);
       c.tag.className = `o3-tag ao-pill ao-pill--${k}`;
-      c.tag.innerHTML = `${icon(STATES[k].icon, { size: 12 })}<span${M.displayName(a).length > NAME_MAX ? ` title="${esc(tag)}"` : ""}>${esc(tag)}</span>`;
+      c.tag.innerHTML = `${icon(STATES[k].icon, { size: 12 })}<span>${esc(tag)}</span>`;
       c.li.classList.toggle("is-needs", k === "needs");
     }
-    const html = M.cardHTML(a, { now, color: ci, offlineMin });
+    const html = M.cardHTML(a, { now, color: ci, offlineMin, replay: replayAt != null });
     if (html !== c.cardHtml) {
       c.cardHtml = html;
       c.card.innerHTML = html;
@@ -311,14 +317,16 @@ export function createOffice(container, opts = {}) {
   function syncStatus(counts = lastCounts) {
     lastCounts = counts;
     const mode = M.statusText(status, { asOf, replayAt }), hud = M.hudText(L.rooms.length, agents.length);
+    // Nothing loaded yet (loading, or a failed first load): no counts, since zero would be a guess.
+    const unknown = status === "loading" || (status === "error" && !agents.length);
     for (const s of STATUSES) root.classList.toggle(`is-${s}`, status === s);
     root.classList.toggle("is-replay", replayAt != null);
     if (root.getAttribute("aria-busy") !== String(status === "loading")) root.setAttribute("aria-busy", String(status === "loading"));
     setText(q(".o3-hud-mode"), mode);
-    setText(q(".o3-hud-meta"), status === "loading" ? "" : hud);
-    setText(sumEl, status === "loading" ? "Loading the office." : `${mode}: ${hud}.` +
+    setText(q(".o3-hud-meta"), unknown ? "" : hud);
+    setText(sumEl, status === "loading" ? "Loading the office." : unknown ? `${mode}.` : `${mode}: ${hud}.` +
       (counts ? ` ${counts.needs} need you, ${counts.working} working, ${counts.idle} idle, ${counts.offline} offline.` : ""));
-    const k = status === "loading" ? "loading" : status === "error" && !agents.length ? "error" : L.empty ? "empty" : "";
+    const k = status === "loading" ? "loading" : status === "error" && !agents.length ? "error" : L.empty && showEmpty ? "empty" : "";
     if (k === overlayKey) return;
     overlayKey = k;
     emptyEl.hidden = !k;
@@ -552,7 +560,7 @@ export function createOffice(container, opts = {}) {
     render();
   };
   const onVisible = () => root.classList.toggle("o3-paused", document.hidden);
-  const onMotion = (e) => { reduced = e.matches; if (reduced) for (const c of [...walkers]) settle(c); };
+  const onMotion = () => { reduced = motionReduced(); if (reduced) for (const c of [...walkers]) settle(c); };
 
   root.classList.add(theme === "light" ? "ao-light" : "ao-dark");
   const unbind = bind(root);
@@ -564,6 +572,7 @@ export function createOffice(container, opts = {}) {
   q(".o3-map").addEventListener("click", onMap);
   document.addEventListener("ao-theme", onTheme);
   document.addEventListener("visibilitychange", onVisible);
+  document.addEventListener("ao-prefs", onMotion);
   mq?.addEventListener?.("change", onMotion);
   const ro = typeof ResizeObserver === "function" ? new ResizeObserver(() => {
     const w = root.clientWidth, h = root.clientHeight;
@@ -636,6 +645,7 @@ export function createOffice(container, opts = {}) {
     root.removeEventListener("wheel", onWheel);
     document.removeEventListener("ao-theme", onTheme);
     document.removeEventListener("visibilitychange", onVisible);
+    document.removeEventListener("ao-prefs", onMotion);
     mq?.removeEventListener?.("change", onMotion);
     ro?.disconnect();
     container.innerHTML = "";
