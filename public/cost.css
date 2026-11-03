@@ -1,0 +1,139 @@
+/* The Cost Report (cost.js). Needs tokens.css, components.css and shell.css first.
+   Colour rules: teal bars and rings, project colours per project; red ONLY for spend over the budget (a day's bar and
+   its label, a ring past 100%, "N days over budget") and errors. No amber. Every bar and segment also has text or a
+   pattern: today is striped, an over-budget day says "over", the token mix has a legend with counts. */
+
+.cc-page-body.cr-root { max-width: none; display: grid; gap: 14px; }
+.cr-root code { font-family: var(--font-mono); font-size: var(--fs-mono); }
+/* Filtered out by the top bar's chips, as in the office; back to full strength while focused. */
+.cr-root .is-dim { opacity: .16; }
+.cr-root .is-dim:focus-within { opacity: 1; }
+
+/* ---------- header: Updated, the period switch, Export CSV ---------- */
+.cr-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin: -10px 4px 0; }
+.cr-updated { margin: 0; color: var(--text-2); }
+.cr-live { display: inline-flex; align-items: center; gap: 6px; }
+.cr-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+/* ---------- KPI tiles ---------- */
+.cr-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.cr-kpi { display: grid; align-content: start; gap: 8px; min-width: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--hover); }
+.cr-kpi h3 { margin: 0; }
+.cr-kpi .ao-ring { gap: 12px; }
+.cr-kpi .ao-ring svg { width: 54px; height: 54px; }
+.cr-kpi .ao-ring-amount { font-size: var(--fs-big); font-weight: var(--fw-big); line-height: 1.1; letter-spacing: -.01em; }
+.cr-kpi-note { display: flex; align-items: center; gap: 5px; margin: 0; color: var(--text-2); font-size: var(--fs-meta); }
+/* Red: a day of the last 7 went over the daily budget. */
+.cr-kpi-note.is-over { color: var(--red-t); font-weight: 650; }
+@media (max-width: 1099px) { .cr-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .cr-kpis { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- spend by day ---------- */
+.cr-chart { --plot: 200px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; padding: 18px 0 26px; }
+.cr-axis { position: relative; min-width: 34px; height: var(--plot); color: var(--text-3); font-size: 11px; }
+.cr-axis > span { position: absolute; right: 0; transform: translateY(50%); white-space: nowrap; }
+/* Room on the right for the budget line's label. */
+.cr-plot { position: relative; height: var(--plot); margin-right: 76px; border-bottom: 1px solid var(--line-2); }
+.cr-gridline { position: absolute; left: 0; right: 0; border-top: 1px solid var(--line); }
+.cr-bars { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 6px; margin: 0; padding: 0 4px; list-style: none; }
+.cr-bar { position: relative; height: 100%; }
+.cr-bar-fill { position: absolute; left: 10%; right: 10%; bottom: 0; height: var(--h); border-radius: 4px 4px 0 0; background: var(--teal); }
+/* Striped: today, so far. */
+.cr-bar.is-today .cr-bar-fill { background: repeating-linear-gradient(135deg, var(--teal) 0 4px, var(--teal-s) 4px 8px); box-shadow: inset 0 0 0 1px var(--teal); }
+/* Red: over the daily budget (striped too when it's today). */
+.cr-bar.is-over .cr-bar-fill { background: var(--red); box-shadow: none; }
+.cr-bar.is-over.is-today .cr-bar-fill { background: repeating-linear-gradient(135deg, var(--red) 0 4px, var(--red-s) 4px 8px); box-shadow: inset 0 0 0 1px var(--red); }
+.cr-bar-tag { position: absolute; z-index: 1; bottom: calc(var(--h) + 4px); left: 50%; transform: translateX(-50%); color: var(--text-2); font-size: 11px; font-weight: 650; line-height: 1.2; white-space: nowrap; }
+.cr-bar.is-over .cr-bar-tag { color: var(--red-t); }
+.cr-bar-day { position: absolute; top: 100%; left: 0; right: 0; margin-top: 6px; color: var(--text-2); font-size: 11px; line-height: 1.2; text-align: center; white-space: nowrap; }
+.cr-bar.is-today .cr-bar-day { color: var(--text); font-weight: 700; }
+.cr-bar.is-over .cr-bar-day { color: var(--red-t); }
+.cr-line { position: absolute; left: 0; right: 0; border-top: 1.5px dashed var(--text-2); pointer-events: none; }
+.cr-line > span { position: absolute; left: calc(100% + 6px); top: -.75em; color: var(--text-2); font-size: 11px; font-weight: 600; white-space: nowrap; }
+.cr-key { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; padding: 0; list-style: none; color: var(--text-2); font-size: var(--fs-meta); }
+.cr-key li, .cr-mix-key li { display: inline-flex; align-items: center; gap: 6px; }
+.cr-sw { display: inline-block; flex: none; width: 18px; height: 10px; box-sizing: border-box; border-radius: 3px; background: var(--teal); }
+.cr-sw.is-today { background: repeating-linear-gradient(135deg, var(--teal) 0 3px, var(--teal-s) 3px 6px); box-shadow: inset 0 0 0 1px var(--teal); }
+.cr-sw.is-over { background: var(--red); }
+.cr-sw--line { height: 0; border-top: 1.5px dashed var(--text-2); border-radius: 0; background: none; }
+@media (max-width: 640px) { .cr-bar-tag { display: none; } .cr-bars { gap: 3px; } .cr-plot { margin-right: 60px; } }
+/* Phones: every other day's label, so "Oct 18" doesn't run into "19". Each bar still says its day to screen readers. */
+@media (max-width: 480px) { .cr-bar:nth-child(even):not(.is-today) .cr-bar-day { visibility: hidden; } }
+
+/* ---------- cards ---------- */
+/* By project and by model stacked beside the (taller) cache savings; by agent beside the top 5. */
+.cr-grid { display: grid; gap: 14px; align-items: start; }
+.cr-grid--cards { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.cr-grid--2 { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
+.cr-stack { display: grid; gap: 14px; min-width: 0; }
+@media (max-width: 1699px) { .cr-grid--2 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 900px) { .cr-grid--cards { grid-template-columns: minmax(0, 1fr); } }
+
+/* By project, by model: name · bar · amount and share. */
+.cr-rows { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.cr-row { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(48px, 1fr) auto; align-items: center; gap: 4px 10px; }
+.cr-name { display: flex; align-items: center; gap: 7px; min-width: 0; font-weight: 600; }
+.cr-name code { font-weight: 500; }
+.cr-row-meta { grid-column: 1; margin-top: -4px; }
+.cr-track { display: block; height: 8px; overflow: hidden; border-radius: var(--r-pill); background: var(--hover); box-shadow: inset 0 0 0 1px var(--line); }
+.cr-fill { display: block; height: 100%; min-width: 2px; border-radius: inherit; background: var(--av); }
+.cr-fill--teal { background: var(--teal); }
+.cr-num { font-weight: 600; text-align: right; white-space: nowrap; }
+
+/* Cache savings */
+.cr-cache-lead { margin: 0; font-size: 15px; line-height: 1.4; }
+.cr-cache-lead + p { margin: 4px 0 0; }
+.cr-root [data-cr="cache"] .ao-panel-body > p.ao-meta { margin: 6px 0 0; }
+.cr-est { display: inline-block; padding: 1px 7px; border: 1px dashed var(--line-2); border-radius: var(--r-pill); color: var(--text-2); font-size: 11px; font-weight: 650; vertical-align: 1px; }
+.cr-mix { display: flex; height: 12px; margin: 12px 0 8px; overflow: hidden; border-radius: var(--r-pill); background: var(--hover); box-shadow: inset 0 0 0 1px var(--line); }
+.cr-mix > span { flex: none; min-width: 2px; height: 100%; }
+/* Solid teal: cache reads. Striped teal: cache writes. Solid gray: fresh input. Dotted gray: output. */
+.cr-mix-cacheRead { background: var(--teal); }
+.cr-mix-cacheWrite { background: repeating-linear-gradient(135deg, var(--teal) 0 3px, var(--teal-s) 3px 6px); }
+.cr-mix-input { background: var(--idle); }
+.cr-mix-output { background: radial-gradient(circle, var(--idle) 1.1px, transparent 1.6px) 0 0 / 5px 5px, var(--hover); box-shadow: inset 0 0 0 1px var(--idle); }
+.cr-mix-key { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; list-style: none; color: var(--text-2); font-size: var(--fs-meta); }
+.cr-mix-key b { color: var(--text); font-weight: 650; }
+.cr-tokens { margin: 10px 0 0; overflow: hidden; color: var(--text-2); text-overflow: ellipsis; white-space: nowrap; }
+.cr-prices { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.cr-prices caption { margin-bottom: 4px; color: var(--text-2); font-size: 12px; font-weight: 600; text-align: left; }
+.cr-prices th, .cr-prices td { padding: 5px 6px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+.cr-prices :is(thead th, tbody th) { color: var(--text-2); font-weight: 600; }
+.cr-prices :is(thead th:first-child, tbody th) { text-align: left; }
+.cr-prices tr.is-used th { color: var(--text); }
+.cr-used { margin-left: 6px; padding: 1px 6px; border-radius: var(--r-pill); background: var(--teal-s); color: var(--teal-t); font-size: 10.5px; font-weight: 700; }
+.cr-how { margin: 8px 0 0; }
+
+/* By agent: each a button that opens its detail. */
+.cr-agents { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.cr-agent {
+  display: grid; grid-template-columns: 22px minmax(0, 16em) minmax(48px, 1fr) auto; align-items: center; gap: 10px;
+  width: 100%; min-height: var(--h-btn); box-sizing: border-box; padding: 4px 8px 4px 4px; border: 0; border-radius: 8px;
+  background: none; color: var(--text); text-align: left; cursor: pointer;
+}
+.cr-agent:hover { background: var(--hover); }
+.cr-agent:hover .cr-agent-name { text-decoration: underline; }
+.cr-agent-who { display: grid; min-width: 0; line-height: 1.25; }
+.cr-agent-who > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cr-agent-name { font-weight: 650; }
+.cr-more { margin: 8px 4px 0; }
+
+/* The costliest sessions: scrolls sideways on a narrow screen. Positioned, so screen-reader-only text inside it scrolls
+   with the table instead of widening the page. */
+.cr-table-wrap { position: relative; overflow-x: auto; margin: 0 -4px; padding: 0 4px; border-radius: 8px; }
+.cr-top { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cr-top th, .cr-top td { padding: 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+.cr-top thead th { color: var(--text-2); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.cr-top tbody th { font-weight: 400; }
+.cr-top td { white-space: nowrap; }
+.cr-who { display: flex; align-items: center; gap: 8px; }
+.cr-who-text { display: grid; min-width: 0; line-height: 1.25; white-space: nowrap; }
+.cr-who-name { font-weight: 650; }
+.cr-who .ao-pill { margin-left: auto; }
+.cr-table-wrap + .ao-meta { margin: 8px 0 0; }
+.cr-prices-wrap { margin-top: 14px; }
+
+/* Export CSV's toast: the file name wraps instead of being cut. */
+.cr-toasts { position: fixed; right: 16px; bottom: 16px; z-index: 30; display: grid; gap: 8px; width: min(360px, calc(100vw - 32px)); pointer-events: none; }
+.cr-toasts > * { pointer-events: auto; }
+.cr-toasts .ao-toast-text { white-space: normal; overflow-wrap: anywhere; }
