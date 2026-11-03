@@ -4,6 +4,7 @@
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const { holdSeconds, holdSetting } = require("./hook");
 
 // v1 registered the first 7; re-running install adds the rest.
 const EVENTS = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest",
@@ -29,13 +30,15 @@ function stripHooks(settings) {
 /**
  * plans: also set CLAUDE_CODE_ENABLE_TODO_TOOLS=1, so models newer than Opus 4.7 / Sonnet 4.6 / Haiku 4.5 keep a plan.
  * Re-running install without it keeps a plans setting made earlier; uninstall removes it.
- * @returns {{settings: object, warnings: string[], telemetry: boolean, plans: boolean}}
+ * hold: seconds a permission request waits for an answer from the dashboard (AGENT_OFFICE_HOLD, 0 = terminal only).
+ * The hook gets it as --hold=N and Claude Code a timeout of N + 10 s, so the wait always ends before Claude Code's does.
+ * @returns {{settings: object, warnings: string[], telemetry: boolean, plans: boolean, hold: number}}
  */
-function applyInstall(settings, { command, telemetry = true, plans = false, url = "http://127.0.0.1:4380", token }) {
-  const warnings = [];
+function applyInstall(settings, { command, telemetry = true, plans = false, url = "http://127.0.0.1:4380", token, hold = holdSetting() }) {
+  const warnings = [], wait = holdSeconds(hold, 0);
   const out = { ...settings, hooks: stripHooks(settings) };
   for (const ev of EVENTS) {
-    const group = { hooks: [{ type: "command", command, timeout: 5 }] };
+    const group = { hooks: [ev === "PermissionRequest" ? { type: "command", command: `${command} --hold=${wait}`, timeout: wait + 10 } : { type: "command", command, timeout: 5 }] };
     if (TOOL_EVENTS.has(ev)) group.matcher = "*";
     out.hooks[ev] = [...(out.hooks[ev] || []), group];
   }
@@ -67,7 +70,7 @@ function applyInstall(settings, { command, telemetry = true, plans = false, url 
     }
     out.env = env;
   }
-  return { settings: out, warnings, telemetry: telemetryOn, plans: (out.env || {}).CLAUDE_CODE_ENABLE_TODO_TOOLS === "1" };
+  return { settings: out, warnings, telemetry: telemetryOn, plans: (out.env || {}).CLAUDE_CODE_ENABLE_TODO_TOOLS === "1", hold: wait };
 }
 
 /** Removes our hooks, and the telemetry and plans settings only where we set them. */
@@ -100,9 +103,21 @@ function writeSettings(file, settings) {
 
 const hasOurs = (settings, ev) => (settings.hooks?.[ev] || []).some((g) => (g.hooks || []).some(ours));
 
-/** True only when every event we need is registered. */
+/** Seconds our PermissionRequest hook may wait for an answer from the dashboard, or null when it was installed before
+ *  answering existed (no --hold, a 5 s timeout: it never waits). */
+function installedHold(settings) {
+  for (const g of settings.hooks?.PermissionRequest || []) {
+    for (const h of g.hooks || []) {
+      const m = ours(h) && /--hold=(\d+)/.exec(h.command);
+      if (m) return Number(m[1]);
+    }
+  }
+  return null;
+}
+
+/** True only when every event we need is registered, the permission hook with its hold. */
 function isInstalled(settings) {
-  return EVENTS.every((ev) => hasOurs(settings, ev));
+  return EVENTS.every((ev) => hasOurs(settings, ev)) && installedHold(settings) != null;
 }
 
 /** "installed", "outdated" (an older install that misses newer events) or "missing". */
@@ -111,4 +126,4 @@ function installState(settings) {
   return EVENTS.some((ev) => hasOurs(settings, ev)) ? "outdated" : "missing";
 }
 
-module.exports = { EVENTS, settingsPath, hookCommand, applyInstall, applyUninstall, readSettings, writeSettings, isInstalled, installState };
+module.exports = { EVENTS, settingsPath, hookCommand, applyInstall, applyUninstall, readSettings, writeSettings, isInstalled, installState, installedHold };

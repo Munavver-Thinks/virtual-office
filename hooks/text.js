@@ -111,4 +111,7 @@ function permissionPhrase(tool) {
   return "use a tool";
 }
 
-module.exports = { cleanPrompt, agentLabel, relPath, permissionPhrase, baseName };
+/** What Claude reads when you press Deny in the dashboard without typing a reply. */
+const DENIED = "The user denied this in Virtual Office.";
+
+module.exports = { cleanPrompt, agentLabel, relPath, permissionPhrase, baseName, DENIED };

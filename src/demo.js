@@ -1,5 +1,6 @@
 "use strict";
-// Demo data: one deterministic working day across 3 projects and 8 agents, plus 13 earlier days of cost.
+// Demo data: one deterministic working day across 3 projects and 8 agents, plus 13 earlier days of cost
+// (and the quiet, busy and empty scenes below).
 // Every event is a raw Claude Code hook payload run through the real hook's build(), so the demo uses the
 // same pipeline as live data. "Now" plays 15:42 in docs/redesign/reference/command-center.png; every
 // scenario time is relative to now, so nothing lands in the future.
@@ -7,6 +8,7 @@
 const { build } = require("../hooks/hook");
 
 const MIN = 60000, DAY = 86400000, NOW_REF = 15 * 60 + 42;
+const DEMO_USER = "mk"; // every demo session's user, and the top bar's avatar in demo mode
 const SP = "/Users/mk/code/supermarket-pos", CA = "/Users/mk/code/checkout-api", DS = "/Users/mk/code/docs-site";
 // Today's totals in the reference: $13.72, in 48.2k · out 1.21M · cache 92.4M.
 const TOKENS_PER_USD = { input: 48200 / 13.72, output: 1210000 / 13.72, cacheRead: 87780000 / 13.72, cacheWrite: 4620000 / 13.72 };
@@ -47,6 +49,8 @@ const AGENTS = [
         fail: "Exit code 1\nFAIL src/basket/BasketTotals.test.tsx\n  ✕ stacks loyalty discounts (12 ms)\n    Expected: 1999\n    Received: 2000" },
       { at: "15:41:50", tool: "Edit", input: { file_path: `${SP}/src/basket/BasketTotals.tsx`, old_string: "  return lines.reduce((sum, l) => sum + l.price, 0);", new_string: "  return lines.reduce((sum, l) => sum + roundCents(l.price - l.discount), 0);" }, open: true },
     ],
+    // Sent from the dashboard while it works: it gets it the next time it stops.
+    messages: [["15:39", "Keep the old rounding helper exported until the next release."]],
     pool: {
       read: ["src/basket/Basket.tsx", "src/basket/BasketTotals.tsx", "src/loyalty/discounts.ts", "src/money/round.ts"],
       edit: [["src/basket/BasketTotals.tsx", "const total = sum(lines);", "const total = roundCents(sum(lines));\nconst saved = sum(discounts);"], ["src/money/round.ts", "export const round = (n) => Math.round(n * 100) / 100;", "export const roundCents = (n) => Math.round(n);"]],
@@ -66,7 +70,12 @@ const AGENTS = [
     ],
     work: [["09:22", "12:09"], ["12:31", "15:41"]],
     waits: [{ at: "10:40", until: "10:52", tool: "Bash", input: bash('psql "$DATABASE_URL" -f scripts/returns-audit.sql', "Run the returns audit query") }],
-    stops: [["12:10", "Returns were counted once by the till and again by the nightly job. The job now skips returns that already have a stock movement."]],
+    // A message from the dashboard, handed over by the 12:10 Stop: it carries on, logs skipped returns, then stops again.
+    messages: [["11:30", "Also log every return the job skips, so we can audit them later."]],
+    stops: [["12:10", "Returns were counted once by the till and again by the nightly job. The job now skips returns that already have a stock movement.", { inbox: true }],
+      ["12:12", "Skipped returns are now written to the sync log with their order number.", { active: true }]],
+    steps: [{ at: "12:11", tool: "Edit", input: { file_path: `${SP}/src/inventory/returns.ts`, old_string: "if (r.movementId) continue;", new_string: "if (r.movementId) { log.info('skipped return', r.orderId); continue; }" }, dur: 2 },
+      { at: "14:40", tool: "Edit", input: { file_path: `${SP}/src/money/round.ts`, old_string: "export const round = (n) => Math.round(n * 100) / 100;", new_string: "export const round = (n) => Math.round((n + Number.EPSILON) * 100) / 100;" }, dur: 2 }],
     pool: {
       read: ["src/inventory/sync.ts", "src/inventory/returns.ts", "jobs/nightly.ts"],
       edit: [["src/inventory/returns.ts", "stock += r.qty;", "if (!r.movementId) stock += r.qty;"], ["jobs/nightly.ts", "await syncAll();", "await syncAll({ since: lastRun });"]],
@@ -85,11 +94,14 @@ const AGENTS = [
       ["Write up the printer setup", "Writing up the printer setup"],
     ],
     work: [["11:07", "12:24"], ["12:51", "15:37"]],
+    // The open wait can be answered in the dashboard for 10 minutes (the longest hold), so there's time to try it.
     waits: [
       { at: "11:40", until: "11:43", tool: "Bash", input: bash("sudo lpadmin -p TM-T20 -E -v usb://EPSON/TM-T20", "Add the printer queue") },
-      { at: "15:38", tool: "Bash", input: bash("sudo apt install cups-filters", "Install the printer filter package") },
+      { at: "15:38", tool: "Bash", input: bash("sudo apt install cups-filters", "Install the printer filter package"), hold: 600 },
     ],
     stops: [["12:25", "The cut-off comes from the driver ignoring the final paper feed. A CUPS filter should fix it. Want me to try that?"]],
+    // The same file as inventory sync, today: the meeting hall lists it under "Where agents overlap".
+    steps: [{ at: "13:20", tool: "Edit", input: { file_path: `${SP}/src/money/round.ts`, old_string: "export const fmt = (n) => n.toFixed(2);", new_string: "export const fmt = (n) => (Math.round(n * 100) / 100).toFixed(2);" }, dur: 2 }],
     pool: {
       read: ["src/printing/receipt.ts", "src/printing/escpos.ts", "docs/printers.md"],
       edit: [["src/printing/escpos.ts", "buf.push(CUT);", "buf.push(FEED, FEED, FEED, CUT);"], ["src/printing/receipt.ts", "printer.raw(bytes);", "printer.queue('TM-T20', bytes);"]],
@@ -134,9 +146,12 @@ const AGENTS = [
       ["Tell support about the change", "Telling support about the change"],
     ],
     work: [["10:42", "11:59"], ["12:21", "15:32"]],
-    waits: [{ at: "15:33", tool: "Edit", input: { file_path: `${CA}/.env.production`, old_string: "REFUND_WEBHOOK_URL=https://hooks.example.com/refunds", new_string: "REFUND_WEBHOOK_URL=https://hooks.example.com/refunds\nREFUND_WEBHOOK_SECRET=${vault:refund-webhook-secret}" } }],
+    // Its hook waited the default 2 minutes and gave up, so this one is answered in the terminal.
+    waits: [{ at: "15:33", tool: "Edit", input: { file_path: `${CA}/.env.production`, old_string: "REFUND_WEBHOOK_URL=https://hooks.example.com/refunds", new_string: "REFUND_WEBHOOK_URL=https://hooks.example.com/refunds\nREFUND_WEBHOOK_SECRET=${vault:refund-webhook-secret}" }, hold: 120 }],
     stops: [["12:00", "Partial refunds now go back to the original card. The webhook part is next."]],
-    steps: [{ at: "11:15", tool: "WebFetch", input: { url: "https://docs.stripe.com/refunds", prompt: "How do partial refunds work?" }, dur: 4 }],
+    // Webhook retries edited this file this morning on the build server, in its own clone: an overlap in the room.
+    steps: [{ at: "11:15", tool: "WebFetch", input: { url: "https://docs.stripe.com/refunds", prompt: "How do partial refunds work?" }, dur: 4 },
+      { at: "14:20", tool: "Edit", input: { file_path: `${CA}/src/webhooks/retry.ts`, old_string: "export const EVENTS = ['charge'];", new_string: "export const EVENTS = ['charge', 'refund'];" }, dur: 2 }],
     pool: {
       read: ["src/refunds/refund.ts", "src/webhooks/send.ts", "src/payments/card.ts"],
       edit: [["src/refunds/refund.ts", "await payments.refund(order.id, amount);", "await payments.refund(order.chargeId, amount, { toOriginalCard: true });"], ["src/refunds/partial.ts", "export function partial() {}", "export function partial(order, amount) {\n  return refund(order, Math.min(amount, order.total));\n}"]],
@@ -175,7 +190,8 @@ const AGENTS = [
     ],
     work: [["09:12", "12:03"]],
     // The machine dropped off mid-command: no result ever came back.
-    steps: [{ at: "12:05", tool: "Bash", input: bash("npm run test:webhooks", "Run the webhook tests"), open: true }],
+    steps: [{ at: "10:30", tool: "Edit", input: { file_path: "/srv/work/checkout-api/src/webhooks/retry.ts", old_string: "const MAX_ATTEMPTS = 5;", new_string: "const GIVE_UP_AFTER = 24 * HOUR;" }, dur: 2 },
+      { at: "12:05", tool: "Bash", input: bash("npm run test:webhooks", "Run the webhook tests"), open: true }],
     pool: {
       read: ["src/webhooks/retry.ts", "src/webhooks/queue.ts"],
       edit: [["src/webhooks/retry.ts", "const delay = 1000;", "const delay = Math.min(2 ** attempt * 1000, HOUR) * (0.5 + Math.random());"]],
@@ -219,48 +235,121 @@ const split = (total, n) => {
   return Array.from({ length: n }, (_, i) => (i === n - 1 ? units - each * (n - 1) : each) / 1e4);
 };
 const START_REF = 8 * 60, KEEP = 20, MIN_ROOM = 90;
+const minutesOf = (hms) => { const [h, m, s = 0] = hms.split(":").map(Number); return h * 60 + m + s / 60; };
+// The answered waits, as minutes before 15:42 ([from, to], none overlapping): squeezed or not, each keeps its length.
+const KEPT = AGENTS.flatMap((a) => (a.waits || []).filter((w) => w.until).map((w) => [NOW_REF - minutesOf(w.until), NOW_REF - minutesOf(w.at)]));
+/** Minutes of the KEPT waits between KEEP and m minutes before 15:42. */
+const keptTo = (m) => KEPT.reduce((n, [a, b]) => n + Math.max(0, Math.min(m, b) - Math.max(a, KEEP)), 0);
 /**
  * Maps a scenario time ("13:40") to a real time, never later than now: normally 15:42 = now.
  * Early in the morning the day so far is shorter than the scenario, so everything older than the last KEEP
- * minutes is squeezed in after midnight (the open waits keep their real length) and the scenario stays in today.
- * With less than MIN_ROOM minutes since midnight, squeezing would break the story (the offline machine would
- * look recent), so the times stay as they are and the start of the day falls in yesterday evening.
+ * minutes is squeezed in after midnight and the scenario stays in today. Waits keep their real length: the open
+ * ones are in the last KEEP minutes, and the answered ones (KEPT) are left out of the squeeze, so the same waits pass
+ * the Alerts Center's 3 minutes whatever the time of day. With less than MIN_ROOM minutes since midnight, squeezing
+ * would break the story (the offline machine would look recent), so the times stay as they are and the start of
+ * the day falls in yesterday evening.
  */
 const clockAt = (now) => {
-  const room = (now - new Date(now).setHours(0, 0, 0, 0)) / MIN - 1, span = NOW_REF - START_REF;
-  const back = room >= span || room < MIN_ROOM ? (m) => m
-    : (m) => (m <= KEEP ? m : KEEP + ((m - KEEP) * (room - KEEP)) / (span - KEEP));
-  return (hms) => {
-    const [h, m, s = 0] = hms.split(":").map(Number);
-    return now - Math.round(back(NOW_REF - h * 60 - m - s / 60) * MIN);
-  };
+  const room = (now - new Date(now).setHours(0, 0, 0, 0)) / MIN - 1, span = NOW_REF - START_REF, squeeze = room < span && room >= MIN_ROOM;
+  const k = (room - KEEP - keptTo(span)) / (span - KEEP - keptTo(span)); // the squeeze outside the kept waits
+  // ms before now. The kept and the squeezed parts are rounded apart, so a kept wait is exactly its length.
+  const back = (m) => (!squeeze || m <= KEEP ? Math.round(m * MIN) : Math.round((KEEP + keptTo(m)) * MIN) + Math.round(k * (m - KEEP - keptTo(m)) * MIN));
+  return (hms) => now - back(NOW_REF - minutesOf(hms));
 };
+// Each machine's OS, and its hook's report on its sends (hook.js healthOf) as of time t: studio-mac's sends failed at
+// 15:05 and 15:21 (Retrying, "2 failed sends in the last hour"); build-server's last events, before it went quiet at
+// 12:05, said 143 events waited in its spool. thinkpad-x1 never failed.
+const HOST_OS = { "thinkpad-x1": "linux", "studio-mac": "darwin", "build-server": "linux" };
+const HEALTH = {
+  "studio-mac": (at, t) => { const fails = ["15:05", "15:21"].map(at).filter((f) => f < t); return fails.length ? { fails: fails.map((f) => new Date(f).toISOString()) } : null; },
+  "build-server": (at, t) => (t >= at("11:50") ? { backlog: 143 } : null),
+};
+const healthAt = (at) => (host, t) => (HEALTH[host] ? HEALTH[host](at, t) : null);
 const BASH_OUT = (cmd) => (/test|jest/.test(cmd) ? "PASS\nTests: 12 passed, 12 total\nTime: 3.2 s" : /install/.test(cmd) ? "added 1 package in 2s" : "");
 const responseOf = (tool, input) => (tool === "Bash" ? { stdout: BASH_OUT(input.command), stderr: "", interrupted: false } : tool === "Write" ? { type: "create", filePath: input.file_path } : {});
 
-/** Turns script lines into hook payloads and usage events, then applies them in time order. */
-function makeEmitter(store) {
-  const queue = [];
-  const hook = (a, t, ev, extra = {}) => queue.push({ t, a, raw: { session_id: a.id, hook_event_name: ev, cwd: a.root, ...extra } });
-  const usage = (a, t, cost) => {
-    const tok = (k) => Math.round(cost * TOKENS_PER_USD[k]);
-    queue.push({ t, usage: { type: "usage", t: new Date(t).toISOString(), session: a.id, cost, model: a.model, input: tok("input"), output: tok("output"), cacheRead: tok("cacheRead"), cacheWrite: tok("cacheWrite") } });
-  };
-  const flush = (live) => {
-    queue.sort((x, y) => x.t - y.t);
-    for (const q of queue.splice(0)) {
-      const e = q.usage || build(q.raw, { now: new Date(q.t), gitRoot: q.a.root, host: q.a.host, user: "mk", name: null });
-      store.apply(e, { persist: false, live });
-    }
-  };
-  return { hook, usage, flush, queue };
+// The demo's alert channels. Nothing is sent anywhere: demoWebhook() stands in for both.
+const DEMO_CHANNELS = {
+  slackWebhookUrl: "https://hooks.slack.com/services/T0DEMO/B0DEMO/k3Vd9demo", slackChannel: "#agent-office",
+  discordWebhookUrl: "https://discord.com/api/webhooks/1290000000000000000/q8Lr2demo", discordChannel: "#ops",
+};
+// The server checks the alert rules every 15 s; the Alerts Center keeps 7 days. In a stretch of over 2 × QUIET without
+// events, the checks between its first and its last QUIET are skipped: only a wait could alert there, and nobody waits
+// through one in the demo.
+const CHECK_MS = 15000, ALERT_DAYS = 7, QUIET = 3600000;
+
+/** The demo's stand-in for Slack and Discord: nothing leaves the machine. Its Discord webhook was deleted at 15:35, so
+ *  from then on it answers 404, until you give Discord another URL. */
+function demoWebhook(now) {
+  const gone = clockAt(now)("15:35");
+  return async ({ channel, url, at }) => (channel === "discord" && url === DEMO_CHANNELS.discordWebhookUrl && at >= gone
+    ? { ok: false, code: 404, error: "HTTP 404" } : { ok: true, code: 200 });
 }
 
-/** Builds today's scenario and the earlier days into the store. Returns the live actors. */
-function loadScenario(store, now) {
-  const at = clockAt(now), em = makeEmitter(store);
+/** Turns script lines into hook payloads, usage events and messages from the dashboard, then applies them in time order.
+ *  health(host, t): what that machine's hook says about its sends at t (see HEALTH).
+ *  wait = { hold, onAsk }: a PermissionRequest whose hook waits `hold` seconds from its own time, as the real hook's does;
+ *  onAsk gets the ask it opened (or null). Every Stop can take messages, as the real hook's does: it hands over any
+ *  queued for that session. checks = { alerts, from, to }: the alert rules run every 15 s of that span, between the
+ *  events, as the server runs them. */
+function makeEmitter(store, health = () => null) {
+  const queue = [];
+  const hook = (a, t, ev, extra = {}, wait = null) => queue.push({ t, a, wait, raw: { session_id: a.id, hook_event_name: ev, cwd: a.root, ...extra } });
+  const usage = (a, t, cost) => {
+    const tok = (k) => Math.round(cost * TOKENS_PER_USD[k]);
+    queue.push({ t, event: { type: "usage", t: new Date(t).toISOString(), session: a.id, cost, model: a.model, input: tok("input"), output: tok("output"), cacheRead: tok("cacheRead"), cacheWrite: tok("cacheWrite") } });
+  };
+  const message = (a, t, text) => queue.push({ t, event: { type: "message", t: new Date(t).toISOString(), session: a.id, text } });
+  // A message to a room, sent as the dashboard sends it, to whoever is in the room at that moment.
+  const room = (t, project, text) => queue.push({ t, room: { project, text } });
+  const flush = (live, checks = null) => {
+    queue.sort((x, y) => x.t - y.t);
+    let next = checks ? checks.from : Infinity, last = -Infinity;
+    const tickTo = (t) => { for (; next <= t; next += CHECK_MS) checks.alerts.check(next); };
+    const until = (t) => {
+      if (t - last > 2 * QUIET) {
+        tickTo(last + QUIET);
+        if (next < t - QUIET) next += Math.ceil((t - QUIET - next) / CHECK_MS) * CHECK_MS;
+      }
+      tickTo(t);
+      last = t;
+    };
+    for (const q of queue.splice(0)) {
+      until(q.t);
+      if (q.room) { store.messageRoom(q.room.project, q.room.text, {}, q.t); continue; }
+      const e = q.event || build(q.raw, { now: new Date(q.t), gitRoot: q.a.root, host: q.a.host, user: DEMO_USER, name: null, inbox: true,
+        health: health(q.a.host, q.t), platform: HOST_OS[q.a.host] || "linux" });
+      if (q.wait) q.wait.onAsk(store.applyHeld({ ...e, hold: q.wait.hold }, { persist: false, live }, q.t).ask);
+      else if (e.inbox) store.applyStop(e, { persist: false, live }, q.t);
+      else store.apply(e, { persist: false, live });
+    }
+    if (checks) until(checks.to);
+  };
+  return { hook, usage, message, room, flush, queue };
+}
+
+// Messages to a room from the dashboard, still waiting for each agent's next stop at 15:42: the meeting hall shows a
+// delivery line per agent (working, waiting on you, idle), and one for the offline machine it couldn't reach.
+const ROOM_MESSAGES = [
+  ["15:30", "supermarket-pos", "Commit what you have before you start anything new."],
+  ["15:36", "checkout-api", "Keep the refund and webhook retry changes in separate commits."],
+];
+
+// Other scenes, to check the Command Center's states: quiet = one agent; busy = the same day in three teams
+// (24 agents in 9 projects); empty = a fresh install with nothing yet (the onboarding card).
+const SCENES = {
+  quiet: () => AGENTS.filter((a) => a.id === "demo-tokens"),
+  busy: () => AGENTS.flatMap((a) => ["", "-eu", "-mobile"].map((s) => (s ? { ...JSON.parse(JSON.stringify(a).split(a.root).join(a.root + s)), id: a.id + s } : a))),
+  empty: () => [],
+};
+const DEMO_SCENES = Object.keys(SCENES);
+
+/** Builds today's scenario and the earlier days into the store. With alerts (src/alerts.js), its rules run over the
+ *  last 7 days as they would have, so the Alerts Center has a history. Returns the live actors. */
+function loadScenario(store, now, { scene, alerts = null } = {}) {
+  const at = clockAt(now), em = makeEmitter(store, healthAt(at));
   const actors = [];
-  AGENTS.forEach((a, idx) => {
+  (SCENES[scene] ? SCENES[scene]() : AGENTS).forEach((a, idx) => {
     const rand = rng(idx + 1), steps = [];
     let n = 0;
     const id = () => `toolu_${a.id.slice(5)}_${++n}`;
@@ -276,9 +365,11 @@ function loadScenario(store, now) {
     };
     em.hook(a, at(a.start), "SessionStart", { source: "startup", model: a.model });
     for (const [t, text] of a.prompts) em.hook(a, at(t), "UserPromptSubmit", { prompt: text });
-    for (const [t, text] of a.stops || []) {
-      em.hook(a, at(t), "Stop", { stop_hook_active: false, last_assistant_message: text });
-      if (at(t) + MIN <= now) em.hook(a, at(t) + MIN, "Notification", { message: "Claude is waiting for your input", notification_type: "idle_prompt" });
+    for (const [t, text] of a.messages || []) em.message(a, at(t), text);
+    // inbox: this Stop hands over a message, so Claude carries on (no "waiting for your input"); active: the Stop after that.
+    for (const [t, text, o = {}] of a.stops || []) {
+      em.hook(a, at(t), "Stop", { stop_hook_active: !!o.active, last_assistant_message: text });
+      if (!o.inbox && at(t) + MIN <= now) em.hook(a, at(t) + MIN, "Notification", { message: "Claude is waiting for your input", notification_type: "idle_prompt" });
     }
     // The plan: a TodoWrite each time an item starts or finishes.
     const times = [...new Set(a.plan.flatMap(([, , s, d]) => [s, d]).filter(Boolean))].map(at).sort((x, y) => x - y);
@@ -290,13 +381,14 @@ function loadScenario(store, now) {
     const busy = [];
     for (const w of a.waits || []) {
       const t0 = at(w.at), tid = id();
+      const actor = w.until ? null : { a, mode: "wait", open: { tid, tool: w.tool, input: w.input }, ask: null };
       em.hook(a, t0 - 1000, "PreToolUse", { tool_name: w.tool, tool_input: w.input, tool_use_id: tid });
-      em.hook(a, t0, "PermissionRequest", { tool_name: w.tool, tool_input: w.input });
+      em.hook(a, t0, "PermissionRequest", { tool_name: w.tool, tool_input: w.input }, actor && w.hold ? { hold: w.hold, onAsk: (ask) => { actor.ask = ask && ask.id; } } : null);
       em.hook(a, t0 + 6000, "Notification", { message: `Claude needs your permission to use ${w.tool}`, notification_type: "permission_prompt" });
       steps.push(t0);
       if (w.until) em.hook(a, at(w.until), "PostToolUse", { tool_name: w.tool, tool_input: w.input, tool_use_id: tid, tool_response: responseOf(w.tool, w.input), duration_ms: 4000 });
       busy.push([t0 - 60000, w.until ? at(w.until) + 30000 : Infinity]);
-      if (!w.until) actors.push({ a, mode: "wait", open: { tid, tool: w.tool, input: w.input } });
+      if (actor) actors.push(actor);
     }
     for (const s of a.steps || []) {
       const tid = tool(at(s.at), s.tool, s.input, s);
@@ -326,8 +418,9 @@ function loadScenario(store, now) {
     if (actor) Object.assign(actor, { plan, n: () => id() });
     else actors.push({ a, plan, n: () => id(), mode: a.offline ? "off" : idle ? "idle" : "work" });
   });
-  history(em, now);
-  em.flush(false);
+  if (scene !== "empty") history(em, now);
+  for (const [t, project, text] of ROOM_MESSAGES) em.room(at(t), project, text);
+  em.flush(false, alerts && { alerts, from: now - ALERT_DAYS * DAY, to: now });
   return actors;
 }
 
@@ -348,13 +441,20 @@ function subagents(a, at, em, tool) {
   return busy;
 }
 
+// Each earlier day's prompt per project, by days ago (mod 4): the cost report's agents differ from day to day.
+const HISTORY_PROMPTS = {
+  "supermarket-pos": ["Add barcode scanning to the stock count", "Product search on the till is slow, make it faster", "Show low stock on the shelf report", "Fix the receipt total for refunds"],
+  "checkout-api": ["Add idempotency keys to payments", "Checkout requests that are slow should be logged", "Card captures that fail should be retried", "Clean up the order status emails"],
+  "docs-site": ["Write the API quickstart", "Fix broken links in the setup guide", "Add a search box to the docs", "Update the screenshots in the guide"],
+};
+
 /** Thirteen earlier days, one short session per project, so the cost report and timeline have history. */
 function history(em, now) {
   HISTORY.forEach(([cost, sp, ca], i) => {
-    const d = HISTORY.length - i, spCost = +(cost * sp).toFixed(2), caCost = +(cost * ca).toFixed(2);
-    const parts = [["supermarket-pos", SP, spCost, "claude-sonnet-4-6", "Speed up the product search on the till"],
-      ["checkout-api", CA, caCost, "claude-opus-4-7", "Clean up the order status emails"],
-      ["docs-site", DS, +(cost - spCost - caCost).toFixed(2), "claude-haiku-4-5", "Fix broken links in the setup guide"]];
+    const d = HISTORY.length - i, spCost = +(cost * sp).toFixed(2), caCost = +(cost * ca).toFixed(2), say = (p) => HISTORY_PROMPTS[p][d % 4];
+    const parts = [["supermarket-pos", SP, spCost, "claude-sonnet-4-6", say("supermarket-pos")],
+      ["checkout-api", CA, caCost, "claude-opus-4-7", say("checkout-api")],
+      ["docs-site", DS, +(cost - spCost - caCost).toFixed(2), "claude-haiku-4-5", say("docs-site")]];
     // Three 10-minute sessions ending just before this time d days ago: on that calendar day (from 00:41 on),
     // and never inside the last-24-hours agent list.
     parts.forEach(([project, root, part, model, prompt], k) => {
@@ -363,23 +463,56 @@ function history(em, now) {
       em.hook(a, t0, "SessionStart", { source: "startup", model });
       em.hook(a, t0 + MIN, "UserPromptSubmit", { prompt });
       split(part, 4).forEach((c, j) => em.usage(a, t0 + (j + 2) * MIN, c));
+      if (d === FAILING.day && project === FAILING.project) failingRun(em, a, t0);
       em.hook(a, t0 + 8 * MIN, "Stop", { stop_hook_active: false, last_assistant_message: "Done for now." });
       em.hook(a, t0 + 10 * MIN, "SessionEnd", { reason: "prompt_input_exit" });
     });
   });
 }
 
-// Live ticking: working agents keep stepping through their plans; two waiting agents get answered
-// after a few minutes and rate limiter asks once. Nothing flips at random.
+// Two days ago, card captures' tests couldn't reach the database three times in a row (an alert), then passed once it
+// was started.
+const FAILING = { day: 2, project: "checkout-api" };
+function failingRun(em, a, t0) {
+  const test = bash("npm test -- captures", "Run the capture tests"), db = bash("docker compose up -d db", "Start the database");
+  const run = (m, input, n, fail) => {
+    const t = t0 + m * MIN, tool_use_id = `toolu_hist_${n}`, base = { tool_name: "Bash", tool_input: input, tool_use_id, duration_ms: 20000 };
+    em.hook(a, t, "PreToolUse", { tool_name: "Bash", tool_input: input, tool_use_id });
+    if (fail) em.hook(a, t + 20000, "PostToolUseFailure", { ...base, error: "Exit code 1\nError: connect ECONNREFUSED 127.0.0.1:5432" });
+    else em.hook(a, t + 20000, "PostToolUse", { ...base, tool_response: responseOf("Bash", input) });
+  };
+  [3, 4, 5].forEach((m, i) => run(m, test, i + 1, true));
+  run(6, db, 4, false);
+  run(7, test, 5, false);
+}
+
+// Live ticking: working agents keep stepping through their plans; two waiting agents get answered in the terminal
+// after a few minutes, and rate limiter asks for permission every 10 minutes from minute 3 (a toast in the Command
+// Center). Its hook waits the default 2 minutes for an answer in the dashboard; without one, the terminal answers
+// 4 minutes in. Answers from the dashboard are picked up by the demo's stand-in for the hook. Nothing flips at random.
 const ANSWER_AT = { "demo-receipt": 100, "demo-refund": 160 };
+const ASK_FIRST = 60, ASK_EVERY = 200, ASK_HOLD = 80; // in 3-second ticks
+const HOLD = 120, PICK_UP_MS = 400;
 const FOLLOW_UPS = ["Tidy up and add a short summary to the PR.", "Add one more test for the edge case we found."];
 
-function startDemo(store, intervalMs = 3000, now = Date.now()) {
-  const actors = loadScenario(store, now);
+function startDemo(store, intervalMs = 3000, now = Date.now(), { scene, alerts = null } = {}) {
+  const actors = loadScenario(store, now, { scene, alerts });
   store.emit("change");
-  const em = makeEmitter(store);
-  let tick = 0, asked = null;
+  const em = makeEmitter(store, healthAt(clockAt(now)));
+  let tick = 0, asked = null, nextAsk = ASK_FIRST, stopped = false;
   const t = () => Date.now();
+  // The hook's side of an ask, as its long-poll would see it. Allowed: the call runs. Denied: it never runs, and the
+  // agent carries on with something else.
+  const pickUp = (x) => setTimeout(() => {
+    const r = !stopped && x.ask ? store.pollAsk(x.ask) : null;
+    if (!r || r.status !== "answered") return;
+    x.ask = null;
+    if (r.decision.behavior === "allow") close(x); else x.open = null;
+    x.mode = "work";
+    em.flush(true);
+  }, PICK_UP_MS);
+  const onAsk = (a) => { const x = actors.find((y) => y.ask === a.id); if (x && a.decision) pickUp(x); };
+  store.on("ask", onAsk);
   const todo = (x) => { const tid = x.n(); em.hook(x.a, t(), "PreToolUse", { tool_name: "TodoWrite", tool_input: { todos: x.plan }, tool_use_id: tid }); em.hook(x.a, t() + 1, "PostToolUse", { tool_name: "TodoWrite", tool_input: { todos: x.plan }, tool_use_id: tid, tool_response: {} }); };
   const close = (x) => {
     const o = x.open; x.open = null;
@@ -397,7 +530,7 @@ function startDemo(store, intervalMs = 3000, now = Date.now()) {
   const timer = setInterval(() => {
     tick++;
     for (const x of actors) {
-      if (x.mode === "wait" && ANSWER_AT[x.a.id] === tick) { close(x); x.mode = "work"; }
+      if (x.mode === "wait" && ANSWER_AT[x.a.id] === tick) { close(x); x.mode = "work"; x.ask = null; }
       if (x.mode === "idle" && x.followUp && ++x.idleTicks === 80) {
         em.hook(x.a, t(), "UserPromptSubmit", { prompt: FOLLOW_UPS[tick % FOLLOW_UPS.length] });
         x.plan.push({ content: "Tidy the code", activeForm: "Tidying the code", status: "in_progress" }, { content: "Write a summary", activeForm: "Writing a summary", status: "pending" });
@@ -405,14 +538,15 @@ function startDemo(store, intervalMs = 3000, now = Date.now()) {
       }
     }
     const rate = actors.find((x) => x.a.id === "demo-rate");
-    if (!asked && tick >= 220 && rate.mode === "work" && !rate.open) {
+    if (rate && tick >= nextAsk && rate.mode === "work" && !rate.open) {
       const input = bash("npm install -D autocannon", "Install the load-test tool");
       rate.open = { tid: rate.n(), tool: "Bash", input };
       em.hook(rate.a, t(), "PreToolUse", { tool_name: "Bash", tool_input: input, tool_use_id: rate.open.tid });
-      em.hook(rate.a, t() + 1, "PermissionRequest", { tool_name: "Bash", tool_input: input });
-      rate.mode = "wait"; asked = tick;
+      // Allowed for this session earlier: decided at once, so the stand-in hook picks it up straight away.
+      em.hook(rate.a, t() + 1, "PermissionRequest", { tool_name: "Bash", tool_input: input }, { hold: HOLD, onAsk: (ask) => { rate.ask = ask && ask.id; if (ask) pickUp(rate); } });
+      rate.mode = "wait"; asked = tick; nextAsk = tick + ASK_EVERY;
     }
-    if (asked && rate.mode === "wait" && tick === asked + 80) { close(rate); rate.mode = "work"; }
+    if (rate && rate.mode === "wait" && tick === asked + ASK_HOLD) { close(rate); rate.mode = "work"; rate.ask = null; }
     const workers = actors.filter((x) => x.mode === "work");
     if (workers.length) {
       const x = workers[tick % workers.length];
@@ -431,7 +565,7 @@ function startDemo(store, intervalMs = 3000, now = Date.now()) {
     em.flush(true);
   }, intervalMs);
   timer.unref();
-  return () => clearInterval(timer);
+  return () => { stopped = true; clearInterval(timer); store.off("ask", onAsk); };
 }
 
-module.exports = { startDemo, loadScenario };
+module.exports = { startDemo, loadScenario, demoWebhook, DEMO_USER, DEMO_SCENES, DEMO_CHANNELS };

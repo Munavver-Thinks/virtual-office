@@ -24,12 +24,13 @@ async function main() {
 
   switch (cmd) {
     case "start":
-      require("../src/server").start({ demo: flag("--demo") });
+    case "demo": {
+      const demo = cmd === "demo" || flag("--demo"), scene = opt("--scene");
+      const { DEMO_SCENES } = require("../src/demo");
+      if (scene && (!demo || !DEMO_SCENES.includes(scene))) { console.error(`--scene works with demo and is one of: ${DEMO_SCENES.join(", ")}.`); process.exit(1); }
+      require("../src/server").start({ demo, scene });
       break;
-
-    case "demo":
-      require("../src/server").start({ demo: true });
-      break;
+    }
 
     case "install": {
       const cfg = config.load();
@@ -47,6 +48,8 @@ async function main() {
       console.log(`Hooks installed in ${file} (backup: settings.json.agent-office.bak).`);
       console.log(r.telemetry ? "Cost and token tracking is on." : "Cost and token tracking is off.");
       if (r.plans) console.log("Plans are on: Claude Code keeps a to-do list on every model, so the dashboard can show planned and done.");
+      console.log(r.hold ? `Permission requests wait up to ${r.hold} s for an answer in the dashboard, then go to the terminal (AGENT_OFFICE_HOLD).`
+        : "Permission requests are answered in the terminal only (AGENT_OFFICE_HOLD=0).");
       r.warnings.forEach((w) => console.log("Note: " + w));
       console.log("Restart any running claude sessions so they pick up the change.");
       break;
@@ -83,6 +86,8 @@ async function main() {
       // Information only: plans are optional.
       console.log(s.env?.CLAUDE_CODE_ENABLE_TODO_TOOLS === "1" ? "ℹ Plans are on for every model."
         : "ℹ Plans show only for Opus 4.7, Sonnet 4.6, Haiku 4.5 and earlier models. For newer models run: agent-office install --with-plans");
+      const hold = inst.installedHold(s);
+      if (hold != null) console.log(hold ? `ℹ Permission requests wait up to ${hold} s for an answer in the dashboard.` : "ℹ Permission requests are answered in the terminal only.");
       process.exitCode = checks.every((c) => c[0]) ? 0 : 1;
       break;
     }
@@ -94,6 +99,7 @@ Usage: agent-office <command>
 
   start            Start the dashboard server (http://localhost:4380)
   demo             Start with fake agents to try it out
+      --scene quiet|busy|empty   one agent, 24 agents, or none yet (the setup steps)
   install          Add hooks and cost tracking to Claude Code
       --no-telemetry   hooks only, no cost or token tracking
       --with-plans     make newer models keep a to-do list (sets CLAUDE_CODE_ENABLE_TODO_TOOLS=1)
@@ -103,7 +109,11 @@ Usage: agent-office <command>
   doctor           Check that everything is connected
   token            Print the access token
 
-Environment: PORT, HOST (0.0.0.0 for team mode), AGENT_OFFICE_DIR`);
+Environment: PORT, HOST (0.0.0.0 for team mode), AGENT_OFFICE_DIR,
+  SLACK_WEBHOOK_URL, DISCORD_WEBHOOK_URL (where alerts go; they win over the ones set in the Alerts Center),
+  AGENT_OFFICE_HOLD (seconds a permission request waits for an answer in the dashboard, default 120, 0 = off;
+  set it before install to wait longer), AGENT_OFFICE_INBOX=0 (sessions on this machine never take messages
+  from the dashboard)`);
   }
 }
 
