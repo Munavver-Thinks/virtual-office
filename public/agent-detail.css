@@ -1,0 +1,223 @@
+/* The Agent Detail slide-over (agent-detail.js). Needs tokens.css, components.css and shell.css first.
+   Colour rules: teal = working, done and actions; amber ONLY for a question waiting on you (its bubble and wait rows);
+   red ONLY for failed steps and errors. Diff deletions are gray strikethrough. */
+
+/* ---------- the slide-over: 760px, full height, from the right over a dim scrim ---------- */
+.ad {
+  width: min(760px, 100vw); max-width: 100vw; height: 100vh; height: 100dvh; max-height: none; margin: 0 0 0 auto; padding: 0;
+  box-sizing: border-box; overflow: auto; overscroll-behavior: contain;
+  border: 0; border-left: 1px solid var(--line-2); border-radius: 14px 0 0 14px;
+  background: linear-gradient(var(--glass-2), var(--glass-2)), var(--bg); color: var(--text); box-shadow: var(--shadow-pop);
+}
+.ad::backdrop { background: rgba(4, 9, 18, .55); }
+.ad[open] { animation: ad-in .22s ease-out; }
+@keyframes ad-in { from { transform: translateX(40px); opacity: .3; } }
+.ad code { font-family: var(--font-mono); font-size: var(--fs-mono); }
+
+.ad-bar {
+  position: sticky; top: 0; z-index: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 10px 18px;
+  border-bottom: 1px solid var(--line); background: var(--glass-2); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+}
+.ad-back { padding: 0 10px 0 6px; color: var(--text); }
+.ad-nav { display: flex; flex-wrap: wrap; align-items: center; column-gap: 2px; }
+.ad-nav a { display: inline-flex; align-items: center; min-height: 30px; padding: 0 8px; border-radius: 7px; color: var(--text-2); font-size: 13px; font-weight: 600; text-decoration: none; }
+.ad-nav a:hover { background: var(--hover); color: var(--text); }
+/* The dot trails each link, so a wrapped line never starts with one. */
+.ad-nav a:not(:last-child)::after { content: "·"; content: "·" / ""; margin: 0 -6px 0 12px; color: var(--text-3); }
+.ad-asof { margin-left: auto; }
+
+/* ---------- header ---------- */
+.ad-head { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px; align-items: start; padding: 18px 22px 10px; }
+.ad-avatar { position: relative; display: inline-grid; }
+.ad-avatar .ao-avatar { width: 56px; height: 56px; border-radius: 14px; font-size: 19px; }
+.ad-badge { position: absolute; right: -5px; bottom: -5px; display: grid; place-items: center; width: 22px; height: 22px; box-sizing: border-box; border: 2px solid currentColor; border-radius: 50%; background: var(--bg-2); }
+.ad-badge--working { color: var(--teal-t); }
+.ad-badge--needs { color: var(--amber-t); }
+.ad-badge--idle { color: var(--idle); }
+.ad-badge--offline { color: var(--off); border-style: dashed; }
+.ad-id { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0; }
+.ad-name { display: flex; align-items: center; gap: 4px; min-width: 0; margin: 0; }
+.ad-name-in {
+  width: 100%; max-width: 100%; field-sizing: content; min-height: 38px; box-sizing: border-box; margin: 0 0 0 -8px; padding: 2px 8px;
+  border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--text);
+  font-size: var(--fs-name); font-weight: var(--fw-name); line-height: 1.25; text-overflow: ellipsis;
+}
+/* Where the browser can size a field to its text, the pencil sits right after the name. */
+@supports (field-sizing: content) { .ad-name-in { flex: 0 1 auto; width: auto; min-width: min(10ch, 100%); } }
+.ad-name-in:hover { border-color: var(--line-2); }
+.ad-name-in:focus { border-color: var(--teal); background: var(--bg-2); }
+.ad-name-pen { flex: none; display: inline-flex; color: var(--text-3); pointer-events: none; }
+.ad-bare { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin: 6px 0 0; }
+.ad-bare code { color: var(--text-2); overflow-wrap: anywhere; }
+.ad-name-status { min-height: 0; margin: -4px 0 0; color: var(--text-2); font-size: var(--fs-meta); }
+.ad-name-status:empty { display: none; }
+.ad-name-status.is-error { color: var(--red-t); }
+.ad-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; min-width: 0; }
+.ad-sub .ao-copy { max-width: 300px; }
+.ad-cwd code { color: var(--text); }
+.ad-facts { display: flex; flex-wrap: wrap; gap: 10px 20px; margin: 0; padding: 4px 22px 16px; }
+.ad-facts > div { min-width: 0; max-width: 100%; }
+.ad-facts dd { margin: 3px 0 0; font-weight: 600; overflow-wrap: anywhere; }
+
+/* ---------- sections ---------- */
+.ad-body { padding: 0 22px 32px; }
+.ad-sec { display: grid; gap: 10px; min-width: 0; padding: 18px 0 20px; border-top: 1px solid var(--line); scroll-margin-top: 58px; }
+.ad-h { margin: 0; font-size: 15px; font-weight: 700; outline: none; }
+.ad-h:focus-visible { outline: var(--focus-w) solid var(--teal-t); outline-offset: var(--focus-off); }
+.ad-chip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 2px 9px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--hover); color: var(--text-2); font-size: var(--fs-meta); }
+.ad-chip code { color: var(--text); }
+.ad-more-btn { justify-self: start; min-height: 26px; padding: 0; border: 0; background: none; color: var(--teal-t); font-size: var(--fs-meta); font-weight: 600; cursor: pointer; }
+.ad-more-btn:hover { text-decoration: underline; }
+.ad-earlier { justify-self: start; }
+.ad-clamp4 { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.ad-clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* Mission */
+.ad-prompt { margin: 0; font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; }
+.ad-meta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0; }
+.ad-follow { display: grid; gap: 6px; margin: 2px 0 0; padding: 0; list-style: none; }
+.ad-follow li { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; }
+.ad-follow time { color: var(--text-2); font-size: 12px; padding-top: 2px; }
+.ad-follow p { margin: 0; }
+
+/* Conversation: you on the right (teal tint), the agent on the left; amber only while a question waits on you. */
+.ad-thread { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.ad-b { display: grid; gap: 6px; max-width: 86%; min-width: 0; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.ad-b > p { margin: 0; overflow-wrap: anywhere; }
+.ad-b-meta { color: var(--text-2); font-size: var(--fs-meta); }
+.ad-b-lead { display: flex; align-items: flex-start; gap: 7px; font-weight: 650; }
+.ad-b-lead > .ao-icon { margin-top: 2px; color: var(--text-2); }
+.ad-b-text { white-space: pre-line; }
+.ad-b-status { display: flex; align-items: center; gap: 5px; color: var(--text-2); font-size: var(--fs-meta); }
+.ad-b--you { justify-self: end; border-color: var(--teal-s); border-bottom-right-radius: 4px; background: linear-gradient(var(--teal-s), var(--teal-s)), var(--bg-2); }
+.ad-b--agent { justify-self: start; border-bottom-left-radius: 4px; background: var(--bg-2); }
+.ad-b--needs { justify-self: start; width: 86%; border-color: var(--amber-b); border-bottom-left-radius: 4px; background: linear-gradient(var(--amber-s), var(--amber-s)), var(--bg-2); }
+.ad-b--needs .ad-b-lead > .ao-icon { color: var(--amber-t); }
+/* Red: the turn ended on an API error. */
+.ad-b--error { justify-self: start; border-color: var(--red-s); border-bottom-left-radius: 4px; background: linear-gradient(var(--red-s), var(--red-s)), var(--bg-2); }
+.ad-b--error .ad-b-lead > .ao-icon { color: var(--red-t); }
+.ad-note { display: flex; justify-content: center; flex-wrap: wrap; gap: 4px 10px; color: var(--text-2); font-size: var(--fs-meta); text-align: center; }
+.ad-note time { color: var(--text-3); }
+
+.ad-answer .cc-answer { margin-top: 2px; }
+.ad-compose { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--bg-2); }
+.ad-compose-label { font-weight: 600; }
+.ad-msg { box-sizing: border-box; width: 100%; min-height: 60px; padding: 8px 10px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg-2); color: var(--text); line-height: 1.45; resize: vertical; }
+.ad-compose .cc-answer-err:empty { display: none; }
+.ad-offline { display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px 12px; border: 1px dashed var(--line-2); border-radius: 10px; color: var(--text-2); }
+.ad-when { margin: -2px 0 0; }
+.ad-when:empty, .ad-status:empty { display: none; }
+
+/* Plan */
+.ad-plan-sum { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+.ad-plan { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
+.ad-plan-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 6px 10px; border: 1px solid transparent; border-radius: 8px; }
+.ad-plan-text { min-width: 0; overflow-wrap: anywhere; }
+.ad-plan-row.is-done > .ao-icon { color: var(--teal-t); }
+.ad-plan-row.is-now { border-color: var(--teal-s); background: var(--teal-s); font-weight: 600; }
+.ad-plan-row.is-now > .ao-icon, .ad-plan-row.is-now .ao-meta { color: var(--teal-t); }
+.ad-plan-row.is-next { color: var(--text-2); }
+.ad-plan--small .ad-plan-row { grid-template-columns: 16px minmax(0, 1fr); padding: 2px 6px; }
+.ad-earlier-plan summary { cursor: pointer; color: var(--text-2); font-size: var(--fs-meta); font-weight: 600; }
+.ad-hint { margin: 0; text-align: center; }
+
+/* ---------- trace ---------- */
+.ad-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ad-cats { flex-wrap: wrap; }
+.ad-cats .ao-seg-opt { padding: 0 9px; }
+.ad-file-pick { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; color: var(--text-2); font-size: var(--fs-meta); font-weight: 600; }
+.ad-file-pick select { min-height: var(--h-btn); max-width: 240px; padding: 0 8px; border: 1px solid var(--line-2); border-radius: var(--r-btn); background: var(--bg-2); color: var(--text); font-size: 13px; }
+.ad-trace { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.ad-trace-key { margin: 4px 0 0; }
+.ad-row, .ad-branch { border-radius: 9px; }
+.ad-row-main {
+  display: grid; grid-template-columns: 42px 28px minmax(0, 1fr) 96px 22px 92px 28px;
+  grid-template-areas: "time tile what dur st cost chev"; align-items: center; gap: 8px; padding: 5px 6px;
+}
+.ad-time { grid-area: time; color: var(--text-2); font-size: 12px; }
+.ad-tile { grid-area: tile; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--hover); color: var(--text-2); }
+.ad-what { grid-area: what; min-width: 0; }
+.ad-title, .ad-line { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ad-title { font-weight: 600; }
+.ad-target { padding: 1px 5px; border-radius: 5px; background: var(--hover); color: var(--text-2); font-weight: 500; }
+.ad-line { color: var(--text-2); font-size: var(--fs-meta); }
+.ad-dur { grid-area: dur; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ad-dur-track { flex: 1; height: 6px; overflow: hidden; border-radius: var(--r-pill); background: var(--hover); }
+.ad-dur-bar { display: block; height: 100%; border-radius: var(--r-pill); background: var(--teal); }
+.ad-dur-text { min-width: 36px; color: var(--text-2); font-size: 12px; text-align: right; white-space: nowrap; }
+.ad-st { grid-area: st; display: grid; place-items: center; }
+.ad-st.is-ok { color: var(--teal-t); }
+.ad-st.is-denied, .ad-st.is-unknown { color: var(--text-2); }
+.ad-cost { grid-area: cost; color: var(--text-2); font-size: 12px; text-align: right; white-space: nowrap; }
+.ad-chev { grid-area: chev; }
+.ad-chev .ao-icon { transition: transform .15s; }
+.ad-chev[aria-expanded="true"] .ao-icon { transform: rotate(180deg); }
+/* Red: a failed step. Teal: one still running. */
+.ad-row.is-error { background: var(--red-s); }
+.ad-row.is-error .ad-st, .ad-row.is-error .ad-tile { color: var(--red-t); }
+.ad-row.is-running { background: var(--teal-s); }
+.ad-more { display: grid; gap: 8px; min-width: 0; padding: 4px 10px 12px 86px; }
+.ad-more > p, .ad-block > p { margin: 0; }
+.ad-block { display: grid; gap: 4px; min-width: 0; }
+.ad-pre { max-height: 260px; margin: 0; padding: 8px 10px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--code); color: var(--text); font: var(--fs-mono)/1.5 var(--font-mono); font-variant-ligatures: none; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ad-pre--error { border-left: 3px solid var(--red); }
+.ad-text { white-space: pre-line; overflow-wrap: anywhere; }
+.ad-mono-path { color: var(--text); text-transform: none; letter-spacing: 0; }
+/* Diff: + teal, − gray struck through (never red). */
+.ad-diff { max-height: 320px; overflow: auto; padding: 6px 0; border: 1px solid var(--line); border-radius: 8px; background: var(--code); font: var(--fs-mono)/1.55 var(--font-mono); font-variant-ligatures: none; }
+.ad-d { padding: 0 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ad-d-sign { display: inline-block; width: 1.4em; }
+.ad-d--add { background: var(--teal-s); color: var(--teal-t); }
+.ad-d--add ins { text-decoration: none; }
+.ad-d--del { color: var(--text-2); }
+.ad-d--del del { text-decoration: line-through; }
+.ad-d--gap { color: var(--text-3); text-align: center; }
+/* Sub-agents: a nested branch on a teal tree line. */
+.ad-tree { display: grid; gap: 2px; margin: 0 0 6px 54px; padding: 0 0 0 12px; list-style: none; border-left: 2px solid var(--teal); }
+.ad-tree .ad-row-main { grid-template-columns: 42px 28px minmax(0, 1fr) 80px 22px 80px 28px; }
+.ad-tree-end, .ad-tree-none { display: flex; gap: 8px; padding: 6px; color: var(--text-2); font-size: var(--fs-meta); }
+.ad-tree-end > .ao-icon { color: var(--teal-t); margin-top: 2px; }
+.ad-tree-end p { margin: 0; min-width: 0; }
+/* Gaps: amber dashed while it waited on you, gray dotted while idle or offline. */
+.ad-gap { display: flex; align-items: center; gap: 10px; margin: 3px 0 3px 50px; padding: 7px 10px; border-radius: 9px; font-size: var(--fs-meta); }
+.ad-gap > p { flex: 1; min-width: 0; margin: 0; }
+.ad-gap time { color: var(--text-2); }
+.ad-gap code { padding: 0 4px; border-radius: 4px; background: var(--hover); }
+.ad-gap--wait { border: 1px dashed var(--amber-b); background: var(--amber-s); }
+.ad-gap--wait > .ao-icon { color: var(--amber-t); }
+.ad-gap--idle { border: 1px dotted var(--line-2); color: var(--text-2); }
+
+/* ---------- files and usage ---------- */
+.ad-fu { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 18px 24px; }
+.ad-fu h4 { margin: 0 0 6px; }
+.ad-files { display: grid; margin: 0; padding: 0; list-style: none; }
+.ad-files li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.ad-file-id { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.ad-file-id .ad-chip { justify-self: start; }
+.ad-file { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ad-files .ao-btn[aria-pressed="true"] { border-color: var(--teal); background: var(--teal-s); color: var(--teal-t); }
+.ad-spark { margin: 0; }
+.ad-spark svg { display: block; width: 100%; height: 56px; }
+.ad-spark-area { fill: var(--teal-s); }
+.ad-spark-line { fill: none; stroke: var(--teal); stroke-width: 2; stroke-linejoin: round; }
+.ad-spark-peak { stroke: var(--text-3); stroke-width: 1; stroke-dasharray: 2 3; }
+.ad-spark figcaption { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; }
+.ad-tokens { margin: 10px 0 4px; }
+.ad-cache { margin: 0; }
+.ad-how summary { cursor: pointer; color: var(--text-2); font-size: var(--fs-meta); font-weight: 600; }
+.ad-how p { margin: 6px 0 0; }
+
+/* ---------- touch and narrow windows ---------- */
+@media (pointer: coarse) { .ad-nav a, .ad-more-btn, .ad-how summary, .ad-earlier-plan summary { min-height: 44px; display: inline-flex; align-items: center; } .ad-name-in { min-height: 44px; } }
+@media (max-width: 700px) {
+  .ad { border-radius: 0; }
+  .ad-head, .ad-facts, .ad-body { padding-left: 14px; padding-right: 14px; }
+  .ad-facts { gap: 10px 20px; }
+  .ad-fu { grid-template-columns: minmax(0, 1fr); }
+  .ad-row-main, .ad-tree .ad-row-main { grid-template-columns: 38px 28px minmax(0, 1fr) 22px 28px; grid-template-areas: "time tile what st chev" ". . dur dur dur" ". . cost cost cost"; row-gap: 2px; }
+  .ad-cost { text-align: left; }
+  .ad-more { padding-left: 10px; }
+  .ad-gap { margin-left: 0; }
+  .ad-tree { margin-left: 12px; }
+  .ad-file-pick { margin-left: 0; }
+}
