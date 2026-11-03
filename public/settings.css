@@ -1,0 +1,162 @@
+/* Settings (settings.js). Needs tokens.css, components.css and shell.css first.
+   Colour rules: teal for healthy, picked and primary; red ONLY for errors (failed sends, a failing webhook, a save that
+   didn't go through) and over budget. Offline is gray and dashed. No amber: nobody waits on you here. */
+
+.cc-page-body.st-root { max-width: 1120px; display: grid; gap: 14px; }
+.st-root code { font-family: var(--font-mono); font-size: var(--fs-mono); }
+.st-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: -10px 4px 0; }
+.st-auto { display: inline-flex; align-items: center; gap: 6px; margin: 0; color: var(--text-2); }
+.st-auto > .ao-icon { color: var(--teal-t); }
+.st-demo[hidden], .st-pane[hidden], .st-add[hidden] { display: none; }
+
+/* ---------- left nav, then one section ---------- */
+.st-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 14px; align-items: start; }
+.st-nav { position: sticky; top: 0; padding: 8px; border: 1px solid var(--line); border-radius: var(--r-panel); background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+.st-nav-list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.st-nav-link {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: var(--h-btn); padding: 6px 10px;
+  border-radius: var(--r-btn); color: var(--text-2); font-weight: 600; text-decoration: none;
+}
+.st-nav-link:hover { background: var(--hover); color: var(--text); }
+.st-nav-link[aria-current="page"] { background: var(--teal-s); color: var(--text); box-shadow: inset 2px 0 0 var(--teal); }
+.st-nav-link[aria-current="page"] > .ao-icon { color: var(--teal-t); }
+.st-nav-text { flex: 1; }
+.st-nav-note { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; white-space: nowrap; color: var(--text-2); }
+.st-nav-note.is-error { color: var(--red-t); }
+.st-panes, .st-pane { display: grid; gap: 14px; min-width: 0; }
+/* A slot may shrink below its content's width, so a wide table scrolls in its own box, not the page. */
+.st-pane > * { min-width: 0; }
+@media (max-width: 760px) {
+  .st-layout { grid-template-columns: minmax(0, 1fr); }
+  .st-nav { position: static; overflow-x: auto; }
+  .st-nav-list { display: flex; gap: 4px; }
+  .st-nav-link { white-space: nowrap; }
+}
+
+/* ---------- shared bits ---------- */
+.st-pill {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border: 1px solid var(--line-2);
+  border-radius: var(--r-pill); background: var(--bg-2); color: var(--text-2); font-size: 12px; font-weight: 600; line-height: 1; white-space: nowrap;
+}
+.st-pill--ok { color: var(--teal-t); background: linear-gradient(var(--teal-s), var(--teal-s)), var(--bg-2); border-color: var(--teal-s); }
+.st-pill--retry { color: var(--text); }
+.st-pill--off { color: var(--off); border: 1px dashed var(--off); }
+/* Red: a failing webhook. */
+.st-pill--error { color: var(--red-t); background: linear-gradient(var(--red-s), var(--red-s)), var(--bg-2); border-color: var(--red-s); }
+.st-saved { color: var(--text-2); font-size: var(--fs-meta); }
+.st-saved.is-error, .st-err { color: var(--red-t); font-weight: 600; }
+.st-err { display: flex; align-items: center; gap: 6px; margin: 0; }
+.st-field { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.st-field > label, .st-field-label { font-weight: 600; }
+.st-field + .ao-meta, .st-lead, .st-foot { margin: 8px 0 0; }
+.st-lead { margin: 0 0 10px; }
+.st-num, .st-money { display: inline-flex; align-items: center; gap: 6px; }
+.st-root input[type="number"], .st-root input[type="text"], .st-root input[type="time"] {
+  min-height: var(--h-btn); padding: 0 10px; border: 1px solid var(--line-2); border-radius: var(--r-btn); background: var(--bg-2); color: var(--text);
+}
+.st-root input[type="number"] { width: 7em; text-align: right; }
+.st-switch { display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: center; gap: 4px 10px; margin-top: 14px; }
+.st-switch > label { font-weight: 600; }
+.st-switch > .ao-meta { grid-column: 2 / -1; margin: 0; }
+.st-check { flex-wrap: wrap; }
+@media (pointer: coarse) { .st-check, .st-switch { min-height: 44px; } .st-check input { width: 24px; height: 24px; } }
+
+/* ---------- machines ---------- */
+.st-table-wrap { position: relative; overflow-x: auto; margin: 0 -4px; padding: 0 4px; border-radius: 8px; }
+.st-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.st-table th, .st-table td { padding: 10px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.st-table thead th { color: var(--text-2); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.st-host { display: grid; gap: 3px; min-width: 11em; font-weight: 400; }
+.st-host code { font-weight: 600; }
+.st-health { display: grid; justify-items: start; gap: 5px; min-width: 12em; }
+.st-line { display: inline-flex; align-items: flex-start; gap: 5px; color: var(--text-2); }
+.st-line > .ao-icon { margin-top: 2px; }
+/* Red: sends that failed. */
+.st-line.is-error { color: var(--red-t); font-weight: 600; }
+.st-backlog { display: grid; gap: 5px; min-width: 14em; }
+.st-bar, .st-meter { display: block; height: 8px; overflow: hidden; border-radius: var(--r-pill); background: var(--hover); box-shadow: inset 0 0 0 1px var(--line); }
+.st-bar > span, .st-meter > span { display: block; height: 100%; }
+/* What waits in a spool is neither done nor an error: neutral. */
+.st-bar > span { background: var(--text-3); }
+.st-nowrap { white-space: nowrap; }
+.st-acts { min-width: 9em; }
+.st-ping-out { margin: 6px 0 0; max-width: 24ch; }
+.st-add { display: grid; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.st-add p { margin: 0; }
+.st-add .cc-snippet { margin: 0; }
+.st-add .cc-copy { justify-self: start; }
+
+/* ---------- token ---------- */
+.st-token { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.st-token-value { padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--code); overflow-wrap: anywhere; }
+.st-token-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.st-token + .ao-meta { margin: 10px 0 0; }
+.st-token ~ .ao-meta { margin: 4px 0 0; }
+/* The confirm is neutral: rotating is safe to undo by updating machines, not an error. */
+.st-confirm, .st-rotated { display: grid; gap: 8px; margin-top: 14px; padding: 12px 14px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--hover); }
+.st-confirm p { margin: 0; }
+.st-confirm-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.st-rotated { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
+.st-rotated > .ao-icon { color: var(--teal-t); margin-top: 2px; }
+.st-rotated p { margin: 0 0 8px; }
+
+/* ---------- budgets ---------- */
+.st-budgets { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.st-budget { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 10px 20px; align-items: start; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--hover); }
+@media (max-width: 900px) { .st-budget { grid-template-columns: minmax(0, 1fr); } }
+.st-budget-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin-bottom: 8px; }
+.st-budget-head > label, .st-budget-label { font-weight: 650; }
+.st-budget .ao-meta { margin: 8px 0 0; }
+.st-use { display: grid; gap: 6px; align-content: center; min-height: 100%; }
+.st-meter > span { background: var(--teal); }
+/* Red only past the limit, and the words say "over budget" too. */
+.st-meter.is-over > span { background: var(--red); }
+.st-use-text { display: flex; align-items: flex-start; gap: 5px; margin: 0; color: var(--text-2); }
+.st-use-text.is-over { color: var(--red-t); font-weight: 600; }
+.st-use-text > .ao-icon { margin-top: 2px; }
+
+/* ---------- projects ---------- */
+.st-projects { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.st-proj { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 10px 20px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--hover); }
+@media (max-width: 900px) { .st-proj { grid-template-columns: minmax(0, 1fr); } }
+.st-proj-form { display: grid; gap: 12px; min-width: 0; }
+.st-proj-name { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; align-items: center; }
+.st-proj-name > label { font-weight: 650; }
+.st-proj-name > input, .st-proj-name > .ao-meta { grid-column: 1 / -1; margin: 0; }
+.st-proj-name > input { width: 100%; box-sizing: border-box; }
+.st-proj-info { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
+.st-proj-today { font-weight: 600; color: var(--text); }
+.st-colors { margin: 0; padding: 0; border: 0; min-width: 0; }
+.st-colors legend { margin-bottom: 6px; padding: 0; font-weight: 650; }
+.st-swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.st-swatch { position: relative; display: inline-grid; cursor: pointer; }
+/* The radio stays real (keyboard, screen readers); the dot is what you see. Picked = a check and a ring, not colour alone. */
+.st-swatch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.st-dot { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--av); color: var(--on-proj); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .18); }
+.st-dot > .ao-icon { visibility: hidden; }
+.st-swatch input:checked + .st-dot { box-shadow: 0 0 0 2px var(--bg-2), 0 0 0 4px var(--text); }
+.st-swatch input:checked + .st-dot > .ao-icon { visibility: visible; }
+.st-swatch input:focus-visible + .st-dot { outline: var(--focus-w) solid var(--teal-t); outline-offset: 6px; }
+@media (pointer: coarse) { .st-dot { width: 44px; height: 44px; } }
+
+/* ---------- notifications ---------- */
+.st-channels { display: grid; gap: 10px; margin: 0 0 10px; padding: 0; list-style: none; }
+.st-channel { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--hover); }
+/* Red border: a failing webhook. */
+.st-channel.is-failing { border-color: var(--red); }
+.st-ch-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.st-ch-line { display: flex; align-items: flex-start; gap: 6px; margin: 0; color: var(--text-2); }
+.st-ch-line.is-error { color: var(--red-t); font-weight: 600; }
+.st-ch-line > .ao-icon { margin-top: 2px; }
+.st-channel .ao-meta { margin: 0; overflow-wrap: anywhere; }
+.st-check + .ao-btn, .st-check ~ .ao-meta { margin-top: 10px; }
+.st-check ~ .ao-meta { margin-bottom: 0; }
+.st-times { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 12px; }
+.st-times > label { font-weight: 600; }
+.st-tz { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; }
+.st-switch:first-child { margin-top: 0; }
+
+/* Toasts: a new token. */
+.st-toasts { position: fixed; right: 16px; bottom: 16px; z-index: 30; display: grid; gap: 8px; width: min(380px, calc(100vw - 32px)); pointer-events: none; }
+.st-toasts > * { pointer-events: auto; }
+.st-toasts .ao-toast-text { white-space: normal; overflow-wrap: anywhere; }
