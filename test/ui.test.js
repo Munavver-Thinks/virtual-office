@@ -214,6 +214,9 @@ test("chips, segmented controls and buttons use real buttons with the right ARIA
   const none = ui.segmented({ label: "Range", value: "nope", options: ["a", "b"] });
   assert.ok(!none.includes('aria-checked="true"'));
   assert.match(none, /tabindex="0" data-value="a"/);
+  const dots = ui.segmented({ label: "Room", value: "", options: [{ value: "", label: "All rooms" }, { value: "shop", label: "shop", dot: 7 }] });
+  assert.match(dots, /data-value="shop"><span class="ao-seg-dot" style="--av:var\(--proj-2\)" aria-hidden="true"><\/span>shop<\/button>/, "a project colour dot, decorative");
+  assert.ok(!/data-value="">[^<]*<span class="ao-seg-dot"/.test(dots), "only where asked for");
 
   const ans = ui.answerButton({ agent: "refund flow" });
   assert.ok(ans.includes("ao-btn--answer") && ans.includes(">Answer<") && ans.includes('aria-label="Answer refund flow"'));
@@ -401,4 +404,38 @@ test("hover card: Esc dismisses the focused anchor's card, and hovering another 
     unbind();
     globalThis.document = saved;
   }
+});
+
+test("toast: amber only for needs-you, escaped text, actions kept; panel badge sits after the title", async () => {
+  const ui = await load("components.js");
+  const needs = ui.toast({ tone: "needs", title: "receipt printer needs you", text: "Wants permission to run a command", actions: ui.answerButton({ agent: "receipt printer" }), attrs: { "data-toast": "k" } });
+  assert.ok(needs.includes("ao-toast--needs") && needs.includes('data-toast="k"') && needs.includes(">Answer<") && needs.includes('title="Wants permission to run a command"'));
+  const info = ui.toast({ tone: "anything", title: "<img src=x onerror=alert(1)>" });
+  assert.ok(info.includes("ao-toast--info") && !info.includes("ao-toast--needs") && !info.includes("<img"), "unknown tones are neutral, text escaped");
+  assert.match(ui.panel({ id: "n", title: "Needs you now", badge: "<b>2</b>" }), /<h2 class="ao-panel-title" id="n-title">Needs you now<\/h2><b>2<\/b>/);
+  const { icon } = await load("icons.js");
+  for (const n of ["half", "circle", "locate", "user"]) assert.ok(icon(n).startsWith("<svg"), n);
+});
+
+// ---------- live re-renders (patch.js) ----------
+test("patch keeps every panel's scroll by position, and a marked box's scroll by its text", async () => {
+  const { fakeDom } = require("./helpers/dom");
+  const { createPatch } = await load("patch.js");
+  const dom = fakeDom(), doc = dom.document, patch = createPatch(doc), el = doc.createElement("div");
+  doc.body.append(el);
+  const col = (n, extra = "") => `<section class="ao-panel"><div class="ao-panel-body"><p>${n}</p>${extra}</div></section>`;
+  const pre = (text) => `<pre class="ad-pre" data-keep-scroll>${text}</pre>`;
+  patch(el, col("a", pre("npm test output")) + col("b") + col("c", pre("diff")));
+  const bodies = () => el.querySelectorAll(".ao-panel-body"), boxes = () => el.querySelectorAll("[data-keep-scroll]");
+  bodies().forEach((b, i) => { b.scrollTop = [0, 120, 340][i]; });
+  boxes()[0].scrollTop = 55;
+  boxes()[1].scrollLeft = 30;
+  // A live update: new markup for every column, a new box at the top of the first.
+  patch(el, col("a2", pre("new step output") + pre("npm test output")) + col("b2") + col("c2", pre("diff")));
+  assert.deepEqual(bodies().map((b) => b.scrollTop || 0), [0, 120, 340], "the second and third columns keep their place too");
+  const [fresh, kept, diff] = boxes();
+  assert.equal(fresh.scrollTop, undefined, "a new box starts at the top");
+  assert.deepEqual([kept.scrollTop, diff.scrollLeft], [55, 30], "a box keeps its scroll by its text, wherever it moved");
+  patch(el, col("a3"));
+  assert.equal(bodies()[0].scrollTop, undefined, "nothing was scrolled at this position: left alone");
 });

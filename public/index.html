@@ -1,80 +1,29 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="ao-dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Virtual office</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%232E4057'/><rect x='3' y='4' width='10' height='6' fill='%233B5470'/><rect x='5' y='11' width='6' height='2' fill='%232E9E6B'/></svg>">
+<title>Virtual Office</title>
+<!-- The saved theme (and Settings' Reduce motion and Show name tags) before anything paints, so a light-theme user never
+     sees a dark flash. theme.js and ui/prefs.js take over after. -->
+<script>try{var p=localStorage.getItem("ao-theme"),l=p==="light"||(p==="system"&&matchMedia("(prefers-color-scheme: light)").matches);document.documentElement.className=(l?"ao-light":"ao-dark")+(localStorage.getItem("ao-motion")==="reduce"?" ao-reduce-motion":"")+(localStorage.getItem("ao-tags")==="off"?" ao-no-tags":"")}catch(e){}</script>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%232DD4BF%27 stroke-width=%272%27 stroke-linejoin=%27round%27><path d=%27M12 2.8l8.5 4.9v8.6L12 21.2l-8.5-4.9V7.7zM3.5 7.7L12 12.6l8.5-4.9M12 12.6v8.6%27/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono&family=Inter:wght@400..800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/ui/tokens.css">
 <link rel="stylesheet" href="/ui/components.css">
 <link rel="stylesheet" href="/office3d.css">
-<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/shell.css">
+<link rel="stylesheet" href="/agent-detail.css">
+<link rel="stylesheet" href="/board.css">
+<link rel="stylesheet" href="/hall.css">
+<link rel="stylesheet" href="/cost.css">
+<link rel="stylesheet" href="/alerts.css">
+<link rel="stylesheet" href="/settings.css">
 </head>
 <body>
-<header>
-  <h1>Virtual office</h1>
-  <div class="stats" aria-live="polite">
-    <span><i class="dot" style="background:var(--working)"></i><b id="c-working">0</b> working</span>
-    <span><i class="dot" style="background:var(--waiting)"></i><b id="c-waiting">0</b> need you</span>
-    <span><i class="dot" style="background:var(--idle)"></i><b id="c-idle">0</b> idle</span>
-    <span class="money">Today <b id="c-cost">$0.00</b></span>
-    <span><b id="c-tokens">0</b> tokens</span>
-  </div>
-  <div class="hbtns">
-    <button class="hbtn" id="theme">Light theme</button>
-    <button class="hbtn" id="open-report">Cost report</button>
-    <button class="hbtn" id="open-settings">Settings</button>
-  </div>
-</header>
-
-<main>
-  <div id="office"></div>
-  <aside>
-    <div id="banner"></div>
-    <h2>Agents</h2>
-    <div id="list"></div>
-  </aside>
-</main>
-
-<dialog id="settings">
-  <h2>Settings <button aria-label="Close" data-close>×</button></h2>
-  <form class="dbody" id="settings-form" method="dialog">
-    <div class="field">
-      <label for="s-budget">Daily budget (USD)</label>
-      <input type="number" id="s-budget" min="0" step="0.5" placeholder="25">
-      <div class="hint">You get an alert when today's spend passes this. Use 0 for no limit.</div>
-    </div>
-    <div class="field">
-      <label for="s-offline">Mark agents offline after (minutes)</label>
-      <input type="number" id="s-offline" min="1" max="1440" step="1">
-    </div>
-    <div class="field">
-      <label for="s-webhook">Slack or Discord webhook</label>
-      <input type="url" id="s-webhook" placeholder="https://hooks.slack.com/services/…">
-      <div class="hint">Optional. Sends a message when an agent needs you or the budget is passed.</div>
-    </div>
-    <div class="field check">
-      <input type="checkbox" id="s-notify"><label for="s-notify" style="margin:0">Alert me when an agent needs me</label>
-    </div>
-    <div class="field">
-      <button type="button" class="btn" id="s-desktop">Turn on desktop notifications</button>
-      <div class="hint" id="s-desktop-hint"></div>
-    </div>
-    <div class="err" id="s-err" role="alert"></div>
-    <div class="actions">
-      <button type="button" class="btn" id="s-test">Send test alert</button>
-      <button type="submit" class="btn primary" id="s-save">Save settings</button>
-    </div>
-  </form>
-</dialog>
-
-<dialog id="report">
-  <h2>Cost report <button aria-label="Close" data-close>×</button></h2>
-  <div class="dbody" id="report-body"></div>
-</dialog>
-
+<noscript><p style="padding:24px">Virtual Office needs JavaScript.</p></noscript>
 <script type="module" src="/app.js"></script>
 </body>
 </html>

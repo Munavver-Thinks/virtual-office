@@ -1,0 +1,282 @@
+/* The Command Center shell (shell.js). Needs tokens.css, components.css and office3d.css first.
+   Colour rules: amber only for "needs you" (badge, cards, toast, hatched ribbon); red only for errors and over budget. */
+
+.cc-body { margin: 0; display: flex; flex-direction: column; min-height: 100vh; background: radial-gradient(1400px 800px at 28% -10%, var(--teal-s), transparent 55%), var(--bg); }
+.cc-body [hidden] { display: none !important; }
+.cc-body :where(input:not([type=checkbox]):not([type=range])) {
+  min-height: var(--h-btn); box-sizing: border-box; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg-2); color: var(--text);
+}
+.cc-body code { font-family: var(--font-mono); font-size: var(--fs-mono); }
+.cc-body a.ao-btn { text-decoration: none; }
+.cc-skip { position: absolute; left: 12px; top: -80px; z-index: 60; }
+.cc-skip:focus { top: 12px; }
+
+/* ---------- top bar ---------- */
+.cc-top {
+  position: relative; z-index: 10; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px; padding: 10px 14px;
+  background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+  border: 1px solid var(--line); border-radius: var(--r-panel); box-shadow: var(--shadow);
+}
+.cc-brand { display: inline-flex; align-items: center; gap: 10px; min-height: var(--h-btn); padding-right: 6px; color: var(--text); font-size: 16px; font-weight: 750; text-decoration: none; white-space: nowrap; }
+.cc-brand > .ao-icon { color: var(--teal-t); }
+.cc-brand-name { display: grid; line-height: 1.2; }
+.cc-demo { font-size: 10px; line-height: 1.3; }
+.cc-nav { display: flex; gap: 2px; min-width: 0; }
+.cc-nav-link {
+  display: inline-flex; align-items: center; gap: 6px; min-height: var(--h-btn); padding: 0 9px; border-radius: var(--r-btn);
+  color: var(--text-2); font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap;
+}
+.cc-nav-link:hover { background: var(--hover); color: var(--text); }
+.cc-nav-link[aria-current="page"] { background: var(--teal-s); color: var(--teal-t); }
+/* Amber: how many agents need you. */
+.cc-badge { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: var(--r-pill); background: var(--amber); color: var(--on-amber); font-size: 11.5px; font-weight: 750; }
+.cc-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.cc-chips .ao-chip { padding: 0 9px; gap: 6px; }
+.cc-spend { display: flex; align-items: center; gap: 12px; margin-left: auto; min-width: 0; }
+.cc-tokens { color: var(--text-2); font-size: 12px; white-space: nowrap; }
+.cc-cost .ao-ring-amount { font-size: 15px; }
+/* "55% of $25 today" fits on one line; the longer "Over budget · 166% of $25 today" wraps here rather than pushing the bar onto two rows. */
+.cc-cost .ao-ring-sub { max-width: 150px; }
+.cc-range .ao-seg-opt { padding: 0 10px; }
+.cc-nocost { display: inline-flex; align-items: center; min-height: 26px; padding: 0 10px; border: 1px dashed var(--line-2); border-radius: var(--r-pill); color: var(--text-2); font-size: var(--fs-meta); white-space: nowrap; }
+.cc-tools { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.cc-tools [aria-current="page"] { background: var(--teal-s); color: var(--teal-t); }
+.cc-avatar { display: inline-grid; place-items: center; width: 34px; height: 34px; margin-left: 4px; }
+.cc-avatar .ao-avatar { width: 34px; height: 34px; font-size: 12px; }
+.cc-avatar--team { box-sizing: border-box; border: 1px solid var(--line-2); border-radius: 50%; background: var(--hover); color: var(--text-2); }
+
+/* ---------- the Command Center: office (65%) beside the rail (35%), the day timeline below ---------- */
+.cc-main { flex: 1; min-height: 0; display: flex; flex-direction: column; outline: none; }
+.cc-cc {
+  flex: 1; min-height: 0; display: grid; gap: 12px; padding: 0 12px 12px;
+  grid-template-columns: minmax(0, 65fr) minmax(340px, 35fr); grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: "office rail" "day day";
+}
+.cc-office { grid-area: office; position: relative; min-height: 0; }
+.cc-office3d { position: absolute; inset: 0; }
+.cc-rail { grid-area: rail; display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: auto; }
+.cc-slot { display: flex; flex-direction: column; flex: none; min-height: 0; }
+/* Needs you gives up height (its list scrolls) before Live activity drops below one agent's group. */
+.cc-slot[data-slot="needs"] { flex: 0 1 auto; min-height: 150px; max-height: 52%; }
+.cc-slot--grow { flex: 1 1 0; min-height: 172px; }
+.cc-slot > .ao-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 14px 16px; }
+.cc-slot .ao-panel-head { flex: none; margin-bottom: 10px; }
+/* Room inside the scroll box for a control's 2px focus ring, offset 2px, on every side. */
+.cc-slot .ao-panel-body { min-height: 0; overflow: auto; margin: -4px -6px; padding: 4px 6px; }
+.cc-slot .ao-panel-end { min-width: 0; }
+@media (min-width: 1100px) { .cc-body { height: 100vh; min-height: 640px; } }
+
+/* Needs you now: amber cards. */
+.cc-count { margin-left: 2px; }
+.cc-needs-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.cc-needs-card { display: grid; gap: 8px; min-width: 0; padding: 11px 14px; border: 1px solid var(--amber-b); border-radius: 12px; background: linear-gradient(var(--amber-s), var(--amber-s)), var(--bg-2); }
+.cc-needs-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.cc-needs-head > .ao-pill { margin-left: auto; align-self: flex-start; }
+.cc-needs-id { min-width: 0; }
+.cc-needs-name { margin: 0; font-size: 14px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-needs-q { margin: 0; font-weight: 650; }
+.cc-needs-stale { display: flex; align-items: center; gap: 6px; margin: 0; }
+.cc-needs-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cc-needs-step { flex: 1; min-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Today's progress */
+.cc-link { display: inline-flex; align-items: center; gap: 2px; min-height: 26px; color: var(--text); font-size: 13px; font-weight: 600; text-decoration: none; }
+.cc-link:hover { color: var(--teal-t); }
+.cc-chev .ao-icon { transform: rotate(-90deg); }
+.cc-prog-sum { display: flex; align-items: baseline; gap: 8px; margin: 0 0 8px; line-height: 1.1; }
+.cc-prog-of { color: var(--text-2); }
+.cc-prog-pct { margin-left: auto; color: var(--teal-t); font-size: 16px; }
+.cc-prog-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 6px 0 8px; padding: 0; list-style: none; color: var(--text-2); font-size: var(--fs-meta); }
+.cc-prog-legend li { display: inline-flex; align-items: center; gap: 5px; }
+.cc-prog-legend .ao-icon { color: var(--teal-t); }
+.cc-prog-rows { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.cc-prog-rows li { display: grid; grid-template-columns: 8px minmax(80px, 150px) minmax(0, 1fr) 48px; align-items: center; gap: 8px; }
+.cc-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--av); }
+.cc-prog-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-prog-num { text-align: right; font-weight: 650; }
+.cc-prog-rows > .cc-prog-more { display: block; padding-left: 16px; }
+.cc-waited { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; color: var(--text-2); font-size: var(--fs-meta); }
+.cc-waited b { color: var(--text); }
+
+/* Live activity */
+.cc-live-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 0 3px var(--teal-s); animation: cc-live 2.4s ease-in-out infinite; }
+@keyframes cc-live { 50% { box-shadow: 0 0 0 5px var(--teal-s); } }
+.cc-feed { margin: 0; padding: 0; list-style: none; }
+.cc-feed-group { padding: 10px 0; border-top: 1px solid var(--line); }
+.cc-feed-group:first-child { padding-top: 0; border-top: 0; }
+.cc-feed-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cc-feed-name { flex: none; max-width: 22ch; margin: 0; padding: 0; border: 0; background: none; color: var(--text); font-weight: 650; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-feed-name:hover { text-decoration: underline; }
+.cc-feed-proj { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-feed-head > .ao-pill { margin-left: auto; }
+.cc-feed-acts { display: grid; gap: 4px; margin: 6px 0 0; padding: 0 0 0 30px; list-style: none; }
+.cc-feed-acts li { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; }
+.cc-feed-acts li > .ao-icon { color: var(--text-2); }
+.cc-feed-acts time { flex: none; color: var(--text-2); font-size: 12px; }
+.cc-act { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-act-sub { color: var(--text-2); }
+/* Red: a failed tool call. */
+.cc-feed-acts li.is-failed > .ao-icon, .cc-act-fail { color: var(--red-t); }
+.cc-act-fail { font-weight: 650; }
+@media (pointer: coarse) { .cc-feed-name, .cc-link { min-height: 44px; } }
+
+/* ---------- day timeline ---------- */
+.cc-day { grid-area: day; display: grid; grid-template-columns: 140px minmax(0, 1fr) auto; align-items: center; gap: 12px 24px; padding: 10px 18px; }
+.cc-day-now { display: grid; gap: 1px; min-width: 0; }
+.cc-day-now h2 { margin: 0; }
+.cc-day-clock { font-size: 24px; font-weight: 750; line-height: 1.15; }
+.cc-day-mode { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 24px; color: var(--text-2); font-size: var(--fs-meta); }
+.cc-replaying { color: var(--text); font-weight: 650; }
+.cc-day-track { position: relative; height: 64px; min-width: 0; }
+.cc-ribbon { position: absolute; left: 0; right: 0; top: 4px; height: 42px; border-bottom: 1px solid var(--line-2); }
+.cc-bar { position: absolute; bottom: 0; height: 100%; box-sizing: border-box; padding: 0 1px; display: flex; flex-direction: column-reverse; }
+.cc-seg { display: block; flex: none; width: 100%; }
+.cc-seg:last-child { border-radius: 2px 2px 0 0; }
+.cc-seg--working, .cc-sw--working { background: var(--teal); }
+/* Hatched amber: someone waited on you. */
+.cc-seg--needs, .cc-sw--needs { background: repeating-linear-gradient(135deg, var(--amber) 0 2.5px, var(--bg-2) 2.5px 5px); }
+.cc-seg--idle, .cc-sw--idle { background: var(--idle); opacity: .55; }
+.cc-now { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--text-2); }
+.cc-ticks { position: absolute; left: 0; right: 0; top: 50px; height: 14px; color: var(--text-3); font-size: 11px; }
+.cc-ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.cc-ticks span:first-child { transform: none; }
+.cc-ticks span:last-child { transform: translateX(-100%); }
+/* The scrubber lies over the ribbon from its start to now; its thumb is the "replaying" line. A range thumb's centre
+   travels from half a thumb in to half a thumb short of the ends, so the input starts half a thumb early and is one
+   thumb wider (scrubWidth() in shell-model.js): the centre then sits exactly over its minute. */
+.cc-day-track { --cc-thumb: 12px; }
+@media (pointer: coarse) { .cc-day-track { --cc-thumb: 44px; } }
+.cc-scrub { position: absolute; left: calc(var(--cc-thumb) / -2); top: 0; height: 50px; margin: 0; padding: 0; background: transparent; cursor: ew-resize; -webkit-appearance: none; appearance: none; }
+.cc-scrub::-webkit-slider-runnable-track { height: 50px; background: transparent; }
+.cc-scrub::-moz-range-track { height: 50px; background: transparent; }
+.cc-scrub::-webkit-slider-thumb { width: var(--cc-thumb); height: 50px; border: 0; border-radius: 2px; background: linear-gradient(var(--text), var(--text)) center / 3px 100% no-repeat; -webkit-appearance: none; appearance: none; }
+.cc-scrub::-moz-range-thumb { width: var(--cc-thumb); height: 50px; border: 0; border-radius: 2px; background: linear-gradient(var(--text), var(--text)) center / 3px 100% no-repeat; }
+.cc-day.is-replay .cc-scrub::-webkit-slider-thumb { background-image: linear-gradient(var(--teal-t), var(--teal-t)); }
+.cc-day.is-replay .cc-scrub::-moz-range-thumb { background-image: linear-gradient(var(--teal-t), var(--teal-t)); }
+.cc-scrub:disabled { display: none; }
+/* Stale: the bars dim; the hour labels (already gray) stay at full strength, so they keep 4.5:1. */
+.cc-day.is-stale .cc-ribbon { filter: grayscale(1); opacity: .6; }
+.cc-day-state { position: absolute; inset: 0 0 14px; display: flex; align-items: center; pointer-events: none; }
+.cc-day-state > * { pointer-events: auto; }
+.cc-day-skel { width: 100%; height: 30px; }
+.cc-day-msg { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--text-2); font-size: 13px; }
+.cc-day-err { color: var(--text); }
+.cc-day-err > .ao-icon { color: var(--red-t); }
+.cc-day-legend { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; color: var(--text-2); font-size: var(--fs-meta); }
+.cc-day-legend li { display: flex; align-items: center; gap: 6px; }
+.cc-sw { width: 14px; height: 8px; border-radius: 2px; }
+
+/* ---------- over the office: toasts (top right) and the onboarding card ---------- */
+.cc-toasts { position: absolute; top: 14px; right: 14px; z-index: 7; display: grid; gap: 8px; width: min(360px, calc(100% - 28px)); pointer-events: none; }
+.cc-toasts > * { pointer-events: auto; }
+.cc-onboard { position: absolute; inset: 0; z-index: 6; display: grid; place-items: center; padding: 64px 16px 16px; overflow: auto; }
+.cc-onboard-card { display: grid; gap: 4px; width: min(620px, 100%); box-sizing: border-box; padding: 22px 24px; }
+.cc-onboard-card > h2, .cc-onboard-card > p { margin: 0; }
+.cc-steps { display: grid; gap: 16px; margin: 14px 0 0; padding: 0; list-style: none; }
+.cc-steps > li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; }
+.cc-step-n { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--teal-s); color: var(--teal-t); font-weight: 750; }
+.cc-step { min-width: 0; }
+.cc-step h3 { display: flex; align-items: center; gap: 8px; margin: 4px 0 6px; font-size: 14px; font-weight: 650; }
+.cc-step p { margin: 0 0 8px; }
+.cc-token { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.cc-token code, .cc-cmd { padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--code); overflow-wrap: anywhere; }
+.cc-token-skel { width: 60%; height: 26px; }
+.cc-snippet { max-height: 170px; margin: 0 0 8px; padding: 10px 12px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--code); color: var(--text); font: 12px/1.45 var(--font-mono); white-space: pre; }
+.cc-pulse { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--teal); animation: cc-pulse 1.4s ease-in-out infinite; }
+@keyframes cc-pulse { 50% { box-shadow: 0 0 0 6px var(--teal-s); } }
+.cc-copy-label, .cc-copied { display: inline-flex; align-items: center; gap: 5px; }
+.cc-copy .cc-copied, .cc-copy.is-copied .cc-copy-label { display: none; }
+.cc-copy.is-copied .cc-copied { display: inline-flex; color: var(--teal-t); }
+.cc-listen { display: flex; align-items: center; gap: 8px; margin: 10px 0 2px; font-weight: 650; }
+.cc-more-setup > summary { margin-top: 8px; cursor: pointer; font-weight: 650; }
+.cc-step-err { display: flex; align-items: center; gap: 6px; }
+.cc-step-err > .ao-icon { color: var(--red-t); }
+
+/* ---------- dialogs: Answer, and the agent panel (a slide-over from the right) ---------- */
+.cc-dialog {
+  width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 48px); box-sizing: border-box; padding: 0; overflow: auto;
+  border: 1px solid var(--line-2); border-radius: 14px; background: var(--glass-2); color: var(--text); box-shadow: var(--shadow-pop);
+}
+.cc-dialog::backdrop { background: rgba(4, 9, 18, .55); }
+.cc-dlg-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--line); background: var(--glass-2); }
+.cc-dlg-id { flex: 1; min-width: 0; }
+.cc-dlg-id > h2 { margin: 0 0 4px; overflow-wrap: anywhere; }
+.cc-dlg-id > p { margin: 0; }
+.cc-dlg-body { display: grid; gap: 14px; padding: 16px 18px; }
+.cc-dlg-body > p, .cc-dlg-body section > p { margin: 0; }
+.cc-dlg-body section { display: grid; gap: 6px; min-width: 0; }
+.cc-dlg-body h3 { margin: 0; }
+.cc-dlg-q { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-weight: 650; }
+.cc-dlg-q > .ao-icon { margin-top: 2px; color: var(--text-2); }
+.cc-dlg-now { display: flex; align-items: center; gap: 8px; }
+.cc-terminal { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--hover); }
+.cc-terminal > p { margin: 0; }
+.cc-resume { display: grid; gap: 6px; }
+.cc-resume summary { cursor: pointer; font-weight: 650; }
+.cc-resume p { margin: 6px 0; }
+.cc-dlg-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px 16px; border-top: 1px solid var(--line); }
+
+/* Answer: the conversation, then the answer box. */
+.cc-dlg-id > h2:focus { outline: none; }
+.cc-convo { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.cc-bubble { display: grid; gap: 6px; max-width: 88%; min-width: 0; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.cc-bubble > p { margin: 0; overflow-wrap: anywhere; }
+.cc-bubble-meta { color: var(--text-2); font-size: var(--fs-meta); }
+/* You: right, teal tint. */
+.cc-bubble--you { justify-self: end; border-color: var(--teal-s); border-bottom-right-radius: 4px; background: linear-gradient(var(--teal-s), var(--teal-s)), var(--bg-2); }
+/* The agent asking: left, amber (it needs you). */
+.cc-bubble--agent { justify-self: start; width: 88%; border-color: var(--amber-b); border-bottom-left-radius: 4px; background: linear-gradient(var(--amber-s), var(--amber-s)), var(--bg-2); }
+.cc-bubble--agent .cc-dlg-q > .ao-icon { color: var(--amber-t); }
+.cc-outside { display: grid; gap: 6px; justify-items: start; }
+.cc-outside > .ao-code { justify-self: stretch; }
+.cc-newer { display: grid; gap: 8px; justify-items: start; }
+.cc-newer > p { margin: 0; }
+/* The answer box: amber border, because you're answering someone who needs you. */
+.cc-answer { display: grid; gap: 10px; padding: 12px 14px; border: 1px solid var(--amber-b); border-radius: 12px; background: var(--bg-2); }
+.cc-answer > p { margin: 0; }
+.cc-answer-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.cc-reply-label { margin-top: 2px; font-weight: 600; }
+.cc-reply { box-sizing: border-box; width: 100%; min-height: 72px; padding: 8px 10px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg-2); color: var(--text); line-height: 1.45; resize: vertical; }
+.cc-reply-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.cc-reply-row > .ao-btn { margin-left: auto; }
+.cc-answer-left { font-variant-numeric: tabular-nums; }
+/* Red: the answer couldn't be sent or delivered. */
+.cc-answer-err { display: flex; gap: 6px; color: var(--red-t); }
+.cc-answer-err:empty, .cc-answer-status:empty { display: none; }
+.cc-answer-note { display: flex; align-items: center; gap: 8px; margin: 0; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; font-weight: 600; }
+.cc-answer-note.is-ok { border-color: var(--teal-s); background: var(--teal-s); color: var(--teal-t); }
+.cc-answer-note.is-error { border-color: var(--red-s); background: var(--red-s); color: var(--red-t); }
+.cc-answer-note.is-busy { color: var(--text-2); }
+@media (pointer: coarse) { .cc-resume summary { min-height: 44px; display: flex; align-items: center; } }
+.cc-clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cc-oneline { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- other screens ---------- */
+.cc-page { flex: 1; min-height: 0; overflow: auto; padding: 4px 12px 24px; }
+.cc-page-title { margin: 8px 4px 16px; outline: none; }
+.cc-page-body { max-width: 980px; }
+.cc-field { display: grid; gap: 6px; }
+.cc-field > label { font-weight: 600; }
+.cc-field > p { margin: 0; }
+.cc-check { display: flex; align-items: center; gap: 8px; }
+.cc-check input { width: 18px; height: 18px; margin: 0; accent-color: var(--teal-btn); }
+.cc-note { display: flex; align-items: center; gap: 8px; margin: 0; padding: 8px 12px; border: 1px dashed var(--line-2); border-radius: 10px; color: var(--text-2); }
+
+/* ---------- narrower windows: the rail stacks under the office ---------- */
+@media (max-width: 1099px) {
+  .cc-cc { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; grid-template-areas: "office" "rail" "day"; }
+  .cc-office { height: clamp(420px, 70vh, 760px); }
+  .cc-rail { overflow: visible; }
+  .cc-slot[data-slot="needs"] { max-height: none; }
+  .cc-slot--grow .ao-panel-body { max-height: 460px; }
+  .cc-day { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "now legend" "track track"; }
+  .cc-day-now { grid-area: now; }
+  .cc-day-track { grid-area: track; }
+  .cc-day-legend { grid-area: legend; }
+  .cc-page { overflow: visible; }
+}
+@media (max-width: 760px) {
+  .cc-nav { overflow-x: auto; }
+  .cc-nav-link:not([aria-current="page"]) .cc-nav-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .cc-spend { margin-left: 0; flex-wrap: wrap; }
+  .cc-tokens { font-size: 11.5px; }
+}
