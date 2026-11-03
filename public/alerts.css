@@ -1,0 +1,95 @@
+/* The Alerts Center (alerts.js). Needs tokens.css, components.css and shell.css first.
+   Colour rules: teal for healthy and delivered; amber ONLY for "needs you" (its type pill, "still waiting"); red ONLY for
+   errors (a failing webhook, a failed delivery, the Errors pill, "still failing") and over budget. Every one also has
+   an icon and words. */
+
+.cc-page-body.al-root { max-width: none; display: grid; gap: 14px; }
+.al-root code { font-family: var(--font-mono); font-size: var(--fs-mono); }
+
+/* ---------- header: Updated, History / Rules ---------- */
+.al-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin: -10px 4px 0; }
+.al-updated { margin: 0; color: var(--text-2); }
+.al-live { display: inline-flex; align-items: center; gap: 6px; }
+.al-pane[hidden] { display: none; }
+
+/* ---------- pills: icon + words ---------- */
+.al-pill {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border: 1px solid var(--line-2);
+  border-radius: var(--r-pill); background: var(--bg-2); color: var(--text-2); font-size: 12px; font-weight: 600; line-height: 1; white-space: nowrap;
+}
+.al-pill--ok { color: var(--teal-t); background: linear-gradient(var(--teal-s), var(--teal-s)), var(--bg-2); border-color: var(--teal-s); }
+/* Red: a failing webhook, errors, over budget. */
+.al-pill--error, .al-pill--over { color: var(--red-t); background: linear-gradient(var(--red-s), var(--red-s)), var(--bg-2); border-color: var(--red-s); }
+/* A budget warning is neutral, with a dashed edge. */
+.al-pill--warn { border-style: dashed; }
+
+/* ---------- channel cards ---------- */
+.al-channels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+@media (max-width: 900px) { .al-channels { grid-template-columns: minmax(0, 1fr); } }
+.al-channel .ao-panel-head { flex-wrap: wrap; }
+.al-ch-line { display: flex; align-items: flex-start; gap: 6px; margin: 0; }
+.al-ch-line > .ao-icon { margin-top: 2px; }
+.al-ch-line.is-failing { color: var(--red-t); font-weight: 600; }
+.al-ch-url { margin: 6px 0 0; overflow-wrap: anywhere; }
+.al-ch-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.al-form { display: grid; gap: 12px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.al-form input[type="url"], .al-form input[type="text"] { width: 100%; box-sizing: border-box; }
+.al-form-err { min-height: 0; margin: 0; color: var(--red-t); font-weight: 600; }
+.al-form-err:empty { display: none; }
+.al-form-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.al-root input[type="url"], .al-root input[type="text"], .al-root input[type="number"] {
+  min-height: var(--h-btn); padding: 0 10px; border: 1px solid var(--line-2); border-radius: var(--r-btn); background: var(--bg-2); color: var(--text);
+}
+
+/* ---------- history ---------- */
+.al-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+/* Scrolls sideways on a narrow screen. Positioned, so screen-reader-only text inside scrolls with it. */
+.al-table-wrap { position: relative; overflow-x: auto; margin: 0 -4px; padding: 0 4px; border-radius: 8px; }
+.al-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.al-table th, .al-table td { padding: 9px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.al-table thead th { color: var(--text-2); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.al-when { display: grid; white-space: nowrap; }
+.al-when time { font-weight: 650; }
+.al-what { min-width: 16em; font-weight: 400; }
+.al-text { display: block; font-weight: 600; }
+.al-context { display: block; margin-top: 2px; }
+/* A command or file in the context line: one line, cut at the end; the whole of it in the tooltip. */
+.al-context code { display: inline-block; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+.al-status { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; color: var(--text-2); }
+/* Amber: still waiting on you. Red: still failing. */
+.al-status.is-needs { color: var(--amber-t); font-weight: 650; }
+.al-status.is-error { color: var(--red-t); font-weight: 650; }
+.al-dl-cell { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.al-dl { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; outline-offset: 2px; }
+.al-dl.is-ok { color: var(--teal-t); }
+.al-dl.is-error { color: var(--red-t); font-weight: 600; }
+.al-dl.is-busy, .al-dl.is-muted { color: var(--text-2); }
+.al-acts { white-space: nowrap; }
+.al-acts > * + * { margin-left: 6px; }
+
+/* ---------- rules ---------- */
+.al-rules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+@media (max-width: 1099px) { .al-rules { grid-template-columns: minmax(0, 1fr); } }
+.al-rule { display: grid; gap: 8px; align-content: start; min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--hover); }
+.al-rule-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.al-rule-title { font-weight: 650; }
+.al-onoff { color: var(--text-2); font-size: var(--fs-meta); font-weight: 600; }
+/* The switch is components.css's .ao-switch; "On" or "Off" beside it says the same. */
+.ao-switch:checked ~ .al-onoff .al-off, .ao-switch:not(:checked) ~ .al-onoff .al-on { display: none; }
+.al-saved { margin-left: auto; color: var(--text-2); font-size: var(--fs-meta); }
+.al-saved.is-error { color: var(--red-t); font-weight: 600; }
+.al-rule-text { margin: 0; line-height: 2.2; }
+.al-num { width: 6.5em; text-align: right; }
+.al-unit { margin-right: -2px; font-weight: 600; }
+.al-rule > .ao-meta { margin: 0; }
+.al-send { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: 2px 0 0; padding: 0; border: 0; }
+.al-send legend { float: left; margin-right: 4px; padding: 0; color: var(--text-2); font-size: var(--fs-meta); font-weight: 600; }
+@media (pointer: coarse) {
+  .al-send .cc-check, .al-rule-head { min-height: 44px; }
+  .al-root .cc-check input { width: 24px; height: 24px; }
+}
+
+/* Toasts: what Send test, a retry or a saved webhook did. */
+.al-toasts { position: fixed; right: 16px; bottom: 16px; z-index: 30; display: grid; gap: 8px; width: min(380px, calc(100vw - 32px)); pointer-events: none; }
+.al-toasts > * { pointer-events: auto; }
+.al-toasts .ao-toast-text { white-space: normal; overflow-wrap: anywhere; }
