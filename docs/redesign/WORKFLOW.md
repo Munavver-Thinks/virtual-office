@@ -70,3 +70,12 @@ PASS = zero Blocker and zero Major.
 | M1 | PASS ([review](reviews/M1.md)) | 1 | approved 2026-10-17 | M1 commit |
 | M2 | PASS ([review](reviews/M2.md)) | 3 | approved 2026-10-17 | M2 commit |
 | M3 | PASS ([review](reviews/M3.md)) | 1 | approved 2026-10-18 | M3 commit |
+| M4 | PASS (fix round 1; no review file) | 1 | approved 2026-10-19 | not committed (owner request) |
+| M5 | PASS (fix round 1; no review file; 7 Minors open) | 1 | approved 2026-10-20 | not committed (owner request) |
+| M6 | PASS (fix round 1; no review file) | 1 | approved 2026-10-23 | not committed (owner request) |
+| M7 | PASS (fix round 1; no review file; 2 Minors open) | 1 | approved 2026-10-23 | not committed (owner request) |
+| M8 | PASS (fix round 1; no review file; 1 Minor open; delivery wording differs from spec, offline agents skipped not queued) | 1 | approved 2026-10-24 | not committed (owner request) |
+| M9 | PASS (no fix round; no review file; 9 Minors open) | 0 | approved 2026-10-24 | not committed (owner request) |
+| M10 | built; no review file | n/a | not recorded | M4–M12 commit |
+| M11 | CHANGES REQUIRED, then the one open Major (Token panel stale state) fixed and tests re-run (349/349), not re-reviewed; the 5 Minors from that review were fixed afterwards (359/359), not re-reviewed | 3 (one past the limit, owner-approved) | pending | M4–M12 commit |
+| M12 | reviewed together with M11 (the Minors found there were fixed afterwards); 11 issues found and fixed (contrast when stale/offline, sideways scroll in Settings/Cost/Hall, long-text wrapping, clipped focus rings, touch targets, login error state); 6 items left with reasons (Alerts checkbox/switch size on touch, Cost chart "over" tag under 640px, amber toast/badge when stream drops, gray ring in stale panels, office focus ring inside its edge, 16% filter dimming) | 0 | pending | M4–M12 commit |
