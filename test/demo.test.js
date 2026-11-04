@@ -9,7 +9,7 @@ const { startDemo, loadScenario } = require("../src/demo");
 
 const mk = () => new Store({ getConfig: () => ({ offlineAfterMin: 30, retentionDays: 30, aliases: {}, dailyBudgetUsd: 25 }) });
 const at1542 = () => { const d = new Date(); d.setHours(15, 42, 0, 0); return d.getTime(); };
-/** Waits for the demo's stand-in hook (it picks answers up after 400 ms), at most 5 s. */
+/** Waits until done() holds, at most 5 s: the demo's stand-in hook picks answers up after 400 ms, and ticks need a moment. */
 async function until(done) {
   for (let i = 0; i < 100 && !done(); i++) await new Promise((r) => setTimeout(r, 50));
 }
@@ -174,10 +174,12 @@ test("demo: live ticks move working agents forward without flipping states at ra
   const store = mk();
   const stop = startDemo(store, 5);
   const before = store.snapshot();
+  const steps = (s) => s.agents.reduce((n, a) => n + a.toolCount, 0);
   await new Promise((r) => setTimeout(r, 200));
+  // A busy runner may have ticked only once by now, and a tick can just finish a step: wait for a new one and its cost.
+  await until(() => { const now = store.snapshot(); return steps(now) > steps(before) && now.totals.todayCost > before.totals.todayCost; });
   stop();
   const after = store.snapshot();
-  const steps = (s) => s.agents.reduce((n, a) => n + a.toolCount, 0);
   assert.ok(steps(after) > steps(before), "agents keep working");
   const state = (s, label) => s.agents.find((a) => a.label === label).state;
   for (const label of ["refund flow", "receipt printer"]) assert.equal(state(after, label), "waiting", label);

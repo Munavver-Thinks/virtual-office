@@ -469,7 +469,8 @@ test("hall DOM: a failed rooms load says so with Retry, the snapshot's panels st
 
 test("hall DOM: replay shows one bubble per step with who is up next and the speaker marked; Esc stops it; leaving stops it; the log reads each bubble", async () => {
   const dom = withDom(), realNow = Date.now, now = realNow();
-  const until = async (ok) => { for (let i = 0; i < 400 && !ok(); i++) await new Promise((r) => setTimeout(r, 2)); assert.ok(ok(), "in time"); };
+  // At most 5 s by the monotonic clock (Date.now is pinned below): a count of 2 ms sleeps lasts 6 s on Windows, under 1 s on Linux.
+  const until = async (ok) => { for (const end = performance.now() + 5000; !ok() && performance.now() < end;) await new Promise((r) => setTimeout(r, 2)); assert.ok(ok(), "in time"); };
   Date.now = () => now; // waits are said to the minute: one mustn't turn between the expected lines and the replay's
   try {
     const { H } = await mods(), { createHall } = await pub("hall.js"), { bind } = await pub("ui/components.js");

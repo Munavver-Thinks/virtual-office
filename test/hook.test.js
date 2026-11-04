@@ -221,12 +221,16 @@ const ADVERSARIAL = {
   "closing-tag spam": "<system-reminder>" + "</system-reminder".repeat(MB / 18),
 };
 
+// CPU time, not wall time: a busy CI runner can pause this process for a while, but a blow-up costs seconds of CPU.
+const cpuMs = () => { const u = process.cpuUsage(); return (u.user + u.system) / 1000; };
+
 test("prompt cleaning and labels stay linear on 1 MB adversarial prompts", () => {
   const { agentLabel } = require("../hooks/text");
   for (const [name, p] of Object.entries(ADVERSARIAL)) {
-    const t = Date.now();
+    const t = cpuMs();
     const c = cleanPrompt(p); agentLabel(p); agentLabel(c.text);
-    assert.ok(Date.now() - t < 300, `${name} took ${Date.now() - t}ms`);
+    const ms = Math.round(cpuMs() - t);
+    assert.ok(ms < 300, `${name} took ${ms} ms of CPU`);
   }
   assert.equal(cleanPrompt("<system-reminder>x</system-reminder>".repeat(20000) + " real prompt").text, "real prompt");
 });

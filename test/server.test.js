@@ -233,6 +233,16 @@ const rawPost = (base, p, headers, body) => new Promise((resolve, reject) => {
   const req = require("http").request(base + p, { method: "POST", headers }, (res) => { res.resume(); resolve(res.statusCode); });
   req.on("error", reject); req.end(body);
 });
+/** Resolves once the server has taken a request for a path starting with `prefix`. A long-poll is held from then on, so
+ *  a test acts on a waiting hook, not on a fixed sleep that a busy machine can outlast. */
+const reached = (app, prefix) => new Promise((resolve) => {
+  const on = (req) => { if (req.url.startsWith(prefix)) { app.server.off("request", on); resolve(); } };
+  app.server.on("request", on);
+});
+/** Waits until ok() holds, at most 5 s. */
+async function until(ok) {
+  for (const end = Date.now() + 5000; !(await ok()) && Date.now() < end;) await new Promise((r) => setTimeout(r, 10));
+}
 /** boot() with a dashboard open: asks are only opened while someone can answer them. */
 async function watched(env) {
   const b = await boot(env);
@@ -274,8 +284,8 @@ test("a waiting permission request gets a random askId; the hook long-polls it w
     assert.equal((await poll(base, token, "x".repeat(24))).status, 404);
     assert.deepEqual(await (await poll(base, token, r.askId)).json(), { status: "pending" });
 
-    const t0 = Date.now(), held = poll(base, token, r.askId, 10).then((x) => x.json());
-    await new Promise((res) => setTimeout(res, 150));
+    const t0 = Date.now(), waiting = reached(app, `/api/decision/${r.askId}`), held = poll(base, token, r.askId, 10).then((x) => x.json());
+    await waiting;
     const a = await answer(base, { askId: r.askId, kind: "reply", text: "  Use the package without sudo  " });
     assert.equal(a.status, 200);
     assert.equal((await a.json()).delivered, true, "the waiting hook got it in the same moment");
@@ -347,12 +357,12 @@ test("an ask ends when the hook hangs up, the window passes, or it's answered in
   let closed = false;
   try {
     // The hook hangs up mid-poll.
-    let { askId } = await asks(base, token);
-    await new Promise((resolve) => {
-      const req = require("http").get(`${base}/api/decision/${askId}?wait=10`, { headers: { Authorization: "Bearer " + token } });
-      req.on("error", () => {});
-      setTimeout(() => { req.destroy(); setTimeout(resolve, 100); }, 100);
-    });
+    let { askId } = await asks(base, token), waiting = reached(app, `/api/decision/${askId}`);
+    const req = require("http").get(`${base}/api/decision/${askId}?wait=10`, { headers: { Authorization: "Bearer " + token } });
+    req.on("error", () => {});
+    await waiting;
+    req.destroy();
+    await until(async () => (await state(base)).question.ask === null);
     const q = (await state(base)).question;
     assert.deepEqual([q.ask, q.windowClosed], [null, true]);
     assert.equal((await answer(base, { askId, kind: "approve" })).status, 410);
@@ -364,14 +374,16 @@ test("an ask ends when the hook hangs up, the window passes, or it's answered in
     assert.ok(Date.now() - t0 < 2500, "the poll ends with the window");
     // Approved in the terminal: the tool ran, so the waiting hook is let go.
     ({ askId } = await asks(base, token, { id: "t3" }));
+    waiting = reached(app, `/api/decision/${askId}`);
     const held = poll(base, token, askId, 10).then((x) => x.json());
-    await new Promise((res) => setTimeout(res, 100));
+    await waiting;
     await fetch(base + "/api/events", { method: "POST", headers: { Authorization: "Bearer " + token }, body: JSON.stringify(hookEvent("PostToolUse", { tool: "Bash", toolUseId: "t3", result: { ok: true } })) });
     assert.deepEqual(await held, { status: "closed" });
     // Shutting down lets go of any waiting hook.
     ({ askId } = await asks(base, token, { id: "t4" }));
+    waiting = reached(app, `/api/decision/${askId}`);
     const last = poll(base, token, askId, 10).then((x) => x.json());
-    await new Promise((res) => setTimeout(res, 100));
+    await waiting;
     closed = true;
     await app.close();
     assert.deepEqual(await last, { status: "closed" });
